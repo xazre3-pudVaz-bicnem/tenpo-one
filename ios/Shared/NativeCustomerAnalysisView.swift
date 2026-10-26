@@ -84,7 +84,7 @@ struct NCRfmView: View {
         return VStack(alignment: .leading, spacing: 14) {
             niCard {
                 VStack(spacing: 0) {
-                    Text("ランク別サマリー（S〜D）").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy).frame(maxWidth: .infinity, alignment: .leading).padding(14)
+                    Text("ランク別サマリー（S〜D）").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy).frame(maxWidth: .infinity, alignment: .leading).padding(14)
                     HStack { Text("ランク").frame(width: 80, alignment: .leading); Spacer(); Text("人数").frame(width: 100, alignment: .trailing); Text("累計売上").frame(width: 140, alignment: .trailing); Text("売上構成比").frame(width: 100, alignment: .trailing) }
                         .font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 14).frame(height: 34).background(NFColor.lilacSoft)
                     ForEach(summary, id: \.0) { r in
@@ -101,7 +101,7 @@ struct NCRfmView: View {
                 }
             }
             VStack(alignment: .leading, spacing: 10) {
-                Text("R × F マトリクス（セルをクリックで顧客リストを表示）").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("R × F マトリクス（セルをクリックで顧客リストを表示）").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Grid(horizontalSpacing: 4, verticalSpacing: 4) {
                     GridRow {
                         Color.clear.frame(width: 60, height: 1)
@@ -136,7 +136,7 @@ struct NCRfmView: View {
                 niCard {
                     VStack(spacing: 0) {
                         HStack {
-                            Text("R\(s.0) × F\(s.1) の顧客（\(picked.count)人）").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+                            Text("R\(s.0) × F\(s.1) の顧客（\(picked.count)人）").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
                             Spacer()
                             Button("絞込を解除") { selected = nil }.font(.system(size: 13, weight: .bold))
                         }.padding(14)
@@ -204,7 +204,7 @@ struct NCDuplicatesView: View {
             VStack(spacing: 0) {
                 HStack {
                     Image(systemName: "person.2").foregroundColor(NFColor.ink3)
-                    Text("\(g.matchType == "phone" ? "電話番号が一致" : "メールアドレスが一致")：\(g.key)").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+                    Text("\(g.matchType == "phone" ? "電話番号が一致" : "メールアドレスが一致")：\(g.key)").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
                     Spacer()
                     if canMerge { niSmallButton("統合", tone: .white, fill: NFColor.iris) { target = g } }
                 }.padding(14)

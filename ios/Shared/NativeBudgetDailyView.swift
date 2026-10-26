@@ -214,14 +214,14 @@ struct NativeBudgetDailyView: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 14) {
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("今月の売上目標").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.ink2)
+                    Text("今月の売上目標").font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.ink2)
                     Text("Monthly sales target").font(.system(size: 10, weight: .semibold)).foregroundColor(NFColor.ink3)
                 }
                 if targetMode {
-                    Text(NT.yen(Int(targetEntry) ?? 0)).font(.system(size: 30, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.iris)
+                    Text(NT.yen(Int(targetEntry) ?? 0)).font(.system(size: 30, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.iris)
                     Text("テンキーで入力 → OK").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.iris)
                 } else if let t = target {
-                    Text(NT.yen(t)).font(.system(size: 30, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy)
+                    Text(NT.yen(t)).font(.system(size: 30, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.navy)
                     if let d = diff, d != 0 {
                         Text("日別の合計との差 " + (d > 0 ? "+" : "−") + NT.yen(abs(d))).font(.system(size: 12, weight: .semibold)).foregroundColor(d > 0 ? NFColor.success : NFColor.danger)
                     }
@@ -331,7 +331,7 @@ struct NativeBudgetDailyView: View {
             HStack {
                 HStack(spacing: 4) { Text("月合計").font(.system(size: 13, weight: .bold)); Text("MONTH TOTAL").font(.system(size: 10, weight: .semibold)) }.foregroundColor(NFColor.ink3)
                 Spacer()
-                Text(NT.yen(total)).font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy)
+                Text(NT.yen(total)).font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.navy)
             }
             .padding(.horizontal, 16).frame(height: 56)
             .overlay(alignment: .top) { Rectangle().fill(NFColor.navy.opacity(0.1)).frame(height: 2) }
@@ -376,28 +376,28 @@ struct NativeBudgetDailyView: View {
             VStack(alignment: .trailing, spacing: 2) {
                 if targetMode {
                     Text("今月の売上目標 / Monthly target").font(.system(size: 11, weight: .semibold)).foregroundColor(.white.opacity(0.7))
-                    Text(NT.yen(Int(targetEntry) ?? 0)).font(.system(size: 26, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                    Text(NT.yen(Int(targetEntry) ?? 0)).font(.system(size: 26, weight: NT.strong)).monospacedDigit().foregroundColor(.white)
                 } else {
                     Text(active.isEmpty ? "" : "\(Int(active.dropFirst(5).prefix(2)) ?? 0)/\(Int(active.suffix(2)) ?? 0)（\(weekdays[weekday(active)])）").font(.system(size: 11, weight: .semibold)).foregroundColor(.white.opacity(0.7))
-                    Text(NT.yen(Int(entry) ?? values[active] ?? 0)).font(.system(size: 26, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                    Text(NT.yen(Int(entry) ?? values[active] ?? 0)).font(.system(size: 26, weight: NT.strong)).monospacedDigit().foregroundColor(.white)
                 }
             }
             .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 16).padding(.vertical, 12)
             .background(RoundedRectangle(cornerRadius: 12).fill(targetMode ? NFColor.iris : NFColor.navy))
             key(wide: true, bg: NFColor.iris.opacity(0.12), fg: NFColor.iris) { press("same") } label: { HStack(spacing: 4) { Text("前日と同じ"); Text("Same as previous").font(.system(size: 10, weight: .semibold)).opacity(0.7) } }
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                key(bg: NFColor.danger.opacity(0.12), fg: NFColor.danger, h: 50) { press("C") } label: { Text("C").font(.system(size: 18, weight: .heavy)) }
+                key(bg: NFColor.danger.opacity(0.12), fg: NFColor.danger, h: 50) { press("C") } label: { Text("C").font(.system(size: 18, weight: NT.strong)) }
                 key(bg: Color(hex: 0xF0F0F4), fg: NFColor.navy, h: 50) { fillAll() } label: { HStack(spacing: 3) { Text("一括入力"); Text("Fill month").font(.system(size: 9, weight: .semibold)).opacity(0.6) } }
                 key(bg: Color(hex: 0xF0F0F4), fg: NFColor.navy, h: 50) { press("⌫") } label: { Image(systemName: "delete.left") }
                 ForEach(["7", "8", "9", "4", "5", "6", "1", "2", "3", "0", "00"], id: \.self) { k in
-                    key(bg: Color(hex: 0xF6F6F9), fg: NFColor.navy, h: 58) { press(k) } label: { Text(k).font(.system(size: 20, weight: .heavy)) }
+                    key(bg: Color(hex: 0xF6F6F9), fg: NFColor.navy, h: 58) { press(k) } label: { Text(k).font(.system(size: 20, weight: NT.strong)) }
                 }
-                key(bg: NFColor.navy, fg: .white, h: 58) { press("OK") } label: { Text("OK").font(.system(size: 18, weight: .heavy)) }
+                key(bg: NFColor.navy, fg: .white, h: 58) { press("OK") } label: { Text("OK").font(.system(size: 18, weight: NT.strong)) }
             }
             key(wide: true, bg: Color(hex: 0xF0F0F4), fg: NFColor.navy) { saveDraft() } label: { HStack(spacing: 4) { Text("一時保存"); Text("Keep draft").font(.system(size: 10, weight: .semibold)).opacity(0.6) } }
             Button { Task { await save() } } label: {
                 HStack(spacing: 8) { Image(systemName: "square.and.arrow.down"); Text(model.busy ? "保存中…" : "保存する") }
-                    .font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                    .font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(RoundedRectangle(cornerRadius: 12).fill(NFColor.navy))
             }

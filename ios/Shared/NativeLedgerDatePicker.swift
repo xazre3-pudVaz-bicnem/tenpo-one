@@ -22,7 +22,7 @@ struct NLDatePickerPanel: View {
         VStack(spacing: 0) {
             HStack(spacing: 12) {
                 Image(systemName: "calendar").font(.system(size: 16, weight: .semibold)).foregroundColor(NLColor.yellow)
-                Text("日付を選ぶ").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                Text("日付を選ぶ").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                 Spacer()
                 if let p = payloads[month] {
                     Text("この月 \(p.monthCount)組・\(p.monthGuests)名").font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundColor(.white.opacity(0.8))
@@ -34,7 +34,7 @@ struct NLDatePickerPanel: View {
             HStack(spacing: 10) {
                 monthButton("chevron.left") { shift(-1) }
                 Spacer()
-                Text(monthLabel).font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink)
+                Text(monthLabel).font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.ink)
                 if loading { ProgressView().scaleEffect(0.7) }
                 Spacer()
                 monthButton("chevron.right") { shift(1) }
@@ -43,7 +43,7 @@ struct NLDatePickerPanel: View {
 
             HStack(spacing: 0) {
                 ForEach(Array(["日", "月", "火", "水", "木", "金", "土"].enumerated()), id: \.offset) { i, w in
-                    Text(w).font(.system(size: 13, weight: .heavy))
+                    Text(w).font(.system(size: 13, weight: NT.strong))
                         .foregroundColor(i == 0 ? NLColor.red : i == 6 ? NLColor.blue : NLColor.muted)
                         .frame(width: cellW, height: 34)
                 }
@@ -70,7 +70,7 @@ struct NLDatePickerPanel: View {
             HStack(spacing: 12) {
                 Button { month = String(today.prefix(7)) } label: {
                     HStack(spacing: 6) { Image(systemName: "arrow.uturn.backward"); Text("今月を出す") }
-                        .font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                        .font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                         .padding(.horizontal, 14).frame(height: 38)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NLColor.page))
                         .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
@@ -78,7 +78,7 @@ struct NLDatePickerPanel: View {
                 .buttonStyle(PressableStyle())
                 .disabled(month == String(today.prefix(7)))
                 Button { onPick(today) } label: {
-                    Text("今日へ").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Text("今日へ").font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                         .padding(.horizontal, 14).frame(height: 38)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NLColor.yellow))
                 }
@@ -117,7 +117,7 @@ struct NLDatePickerPanel: View {
         return Button { onPick(d.date) } label: {
             VStack(spacing: 3) {
                 HStack(spacing: 4) {
-                    Text("\(d.day)").font(.system(size: 21, weight: on || isToday ? .heavy : .semibold)).monospacedDigit().foregroundColor(color)
+                    Text("\(d.day)").font(.system(size: 21, weight: on || isToday ? NT.strong : .semibold)).monospacedDigit().foregroundColor(color)
                     if d.attention == true && d.inMonth {
                         Circle().fill(on ? NLColor.yellow : NLColor.red).frame(width: 7, height: 7)
                     }

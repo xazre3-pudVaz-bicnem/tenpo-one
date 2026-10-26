@@ -66,7 +66,7 @@ struct NativeOptionPicker: View {
         VStack(spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(item.name).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                    Text(item.name).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                     Text(item.english.map { "\($0) · オプションを選ぶ" } ?? "オプションを選ぶ").font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)
                 }
                 Spacer(minLength: 8)
@@ -74,7 +74,7 @@ struct NativeOptionPicker: View {
                     if item.openPrice {
                         Text("次に価格").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
                     } else {
-                        Text(NT.yen(item.price + extra)).font(.system(size: 26, weight: .heavy)).foregroundColor(NT.purple)
+                        Text(NT.yen(item.price + extra)).font(.system(size: 26, weight: NT.strong)).foregroundColor(NT.purple)
                     }
                     if extra > 0 {
                         Text("オプション +\(NT.yen(extra))").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
@@ -95,7 +95,7 @@ struct NativeOptionPicker: View {
                                     Text(en).font(.system(size: 12)).foregroundColor(NT.ink3)
                                 }
                                 Text(g.minimum >= 1 ? "必須" : "任意")
-                                    .font(.system(size: 11, weight: .heavy))
+                                    .font(.system(size: 11, weight: NT.strong))
                                     .foregroundColor(g.minimum >= 1 ? NT.danger : NT.ink2)
                                     .padding(.horizontal, 7).padding(.vertical, 2)
                                     .background(Capsule().fill(g.minimum >= 1 ? NT.dangerBg : NT.lilac))
@@ -131,7 +131,7 @@ struct NativeOptionPicker: View {
                     onDone(picked.map(\.id), picked.map(\.name), picked.map(\.title), extra)
                 } label: {
                     Text(item.openPrice ? "次に価格" : "注文に追加")
-                        .font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                        .font(.system(size: 18, weight: NT.strong)).foregroundColor(.white)
                         .frame(minWidth: 240, minHeight: 56)
                         .background(RoundedRectangle(cornerRadius: 14).fill(allOk ? NT.purple : NT.ink3.opacity(0.5)))
                 }
@@ -200,14 +200,14 @@ struct NativeOpenPricePad: View {
     var body: some View {
         VStack(spacing: 14) {
             VStack(spacing: 4) {
-                Text(item.name).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
+                Text(item.name).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
                 Text(optionNames.isEmpty ? "価格を入力" : optionNames.joined(separator: ", "))
                     .font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(2)
             }
             HStack(alignment: .firstTextBaseline) {
                 Text("価格").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
                 Spacer()
-                Text(NT.yen(yen)).font(.system(size: 36, weight: .heavy)).foregroundColor(yen > 0 ? NT.ink : NT.ink3)
+                Text(NT.yen(yen)).font(.system(size: 36, weight: NT.strong)).foregroundColor(yen > 0 ? NT.ink : NT.ink3)
                     .lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -239,7 +239,7 @@ struct NativeOpenPricePad: View {
                 }
                 .buttonStyle(PressableStyle())
                 Button { onDone(yen) } label: {
-                    Text("注文に追加").font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                    Text("注文に追加").font(.system(size: 18, weight: NT.strong)).foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 56)
                         .background(RoundedRectangle(cornerRadius: 14).fill(yen > 0 ? NT.purple : NT.ink3.opacity(0.5)))
                 }
@@ -281,7 +281,7 @@ struct NativeCustomPricePad: View {
         VStack(spacing: 14) {
             VStack(spacing: 4) {
                 Text("金額を入力 / Enter amount").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
-                Text(title).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
+                Text(title).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
                 Text("金額（1つあたり・税込）を入れます。").font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3)
             }
             VStack(alignment: .leading, spacing: 4) {
@@ -295,7 +295,7 @@ struct NativeCustomPricePad: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("金額 / Amount").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
                 Spacer()
-                Text(NT.yen(yen)).font(.system(size: 36, weight: .heavy)).foregroundColor(yen > 0 ? NT.ink : NT.ink3)
+                Text(NT.yen(yen)).font(.system(size: 36, weight: NT.strong)).foregroundColor(yen > 0 ? NT.ink : NT.ink3)
                     .lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 16).padding(.vertical, 12)
@@ -316,7 +316,7 @@ struct NativeCustomPricePad: View {
                 }
                 .buttonStyle(PressableStyle())
                 Button { onDone(yen, memo) } label: {
-                    Text("決定 / OK").font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                    Text("決定 / OK").font(.system(size: 18, weight: NT.strong)).foregroundColor(.white)
                         .frame(maxWidth: .infinity, minHeight: 56)
                         .background(RoundedRectangle(cornerRadius: 14).fill(NT.purple))
                 }

@@ -104,7 +104,7 @@ enum NBCArtist {
         ctx.setFillColor(NTQArtist.terra.cgColor)
         ctx.fill(CGRect(x: cx - mm(4.5), y: ly, width: mm(9), height: mm(0.3)))
         ly += mm(0.3) + mm(1.6)
-        ly += NTQArtist.line(NTQArtist.attr("ご予約", pt: 13, weight: .heavy, color: NTQArtist.ink, track: 0.12, lineHeight: 1.1), centerX: cx, y: ly, width: leftW)
+        ly += NTQArtist.line(NTQArtist.attr("ご予約", pt: 13, weight: NT.strong, color: NTQArtist.ink, track: 0.12, lineHeight: 1.1), centerX: cx, y: ly, width: leftW)
         ly += mm(1)
         ly += NTQArtist.line(NTQArtist.attr("RESERVATION", pt: 5.2, weight: .bold, color: NTQArtist.terra, track: 0.42, lineHeight: 1.1), centerX: cx, y: ly, width: leftW)
         ly += mm(1.8)
@@ -124,7 +124,7 @@ enum NBCArtist {
             let s = NSMutableAttributedString(attributedString: NTQArtist.attr("TEL", pt: 4.6, weight: .bold, color: NTQArtist.terra, track: 0.2))
             // 「TEL」と番号の間 1.2mm
             s.addAttribute(.kern, value: 4.6 * 0.2 + mm(1.2), range: NSRange(location: 2, length: 1))
-            s.append(NTQArtist.attr(p, pt: 8.2, weight: .heavy, color: NTQArtist.ink, track: 0.06))
+            s.append(NTQArtist.attr(p, pt: 8.2, weight: NT.strong, color: NTQArtist.ink, track: 0.06))
             telH = s.size().height.rounded(.up)
             tel = s
         }

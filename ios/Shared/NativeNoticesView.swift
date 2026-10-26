@@ -169,7 +169,7 @@ struct NativeNoticesView: View {
 
     private var settings: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("通知の表示設定").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text("通知の表示設定").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
             Text("この端末でのみ有効な表示設定です。種別ごとに通知の受信自体をON/OFFする配信設定は今後対応予定です。").font(.system(size: 12)).foregroundColor(NFColor.ink3)
             ScrollView {
                 VStack(spacing: 8) {

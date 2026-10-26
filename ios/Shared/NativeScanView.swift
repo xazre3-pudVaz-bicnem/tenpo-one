@@ -196,7 +196,7 @@ struct NativeScanView: View {
     private func card<C: View>(_ title: String, en: String, trailing: AnyView? = nil, @ViewBuilder _ c: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(title).font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(title).font(.system(size: 16, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Text(en).font(.system(size: 10.5, weight: .semibold)).foregroundColor(NFColor.ink3)
                 Spacer()
                 if let trailing { trailing }
@@ -221,7 +221,7 @@ struct NativeScanView: View {
             }
             Spacer()
             NPBadge(text: t.hasReceipt ? "✓ レシート登録済み（撮り直すと差し替え）" : "レシート未添付", color: t.hasReceipt ? Color(hex: 0x1E8F62) : NFColor.ink3)
-            Text(NT.yen(t.amount)).font(.system(size: 24, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+            Text(NT.yen(t.amount)).font(.system(size: 24, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.ink)
             Button { model.tx = nil } label: { Image(systemName: "xmark.circle.fill").font(.system(size: 20)).foregroundColor(NFColor.ink3) }.buttonStyle(.plain)
         }
         .padding(16)
@@ -235,7 +235,7 @@ struct NativeScanView: View {
                 HStack(spacing: 10) {
                     Button { showCamera = true } label: {
                         HStack(spacing: 8) { Image(systemName: "camera.fill"); Text("撮影する") }
-                            .font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                            .font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                             .frame(maxWidth: .infinity).frame(height: 64)
                             .background(RoundedRectangle(cornerRadius: 14).fill(NFColor.iris))
                     }
@@ -380,7 +380,7 @@ struct NativeScanView: View {
                     .background(RoundedRectangle(cornerRadius: 9).fill(NFColor.lilac))
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
-                        Text(d.typeLabel).font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1)
+                        Text(d.typeLabel).font(.system(size: 10, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 5).fill(Self.tagColor(d.docType)))
                         Text(d.title ?? d.fileName).font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
                     }
@@ -392,7 +392,7 @@ struct NativeScanView: View {
                 }
                 Spacer()
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(d.amount.map { NT.yen($0) } ?? "—").font(.system(size: 14, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                    Text(d.amount.map { NT.yen($0) } ?? "—").font(.system(size: 14, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.ink)
                     NPBadge(text: d.status == "inbox" ? "未仕分け" : "仕分け済", color: d.status == "inbox" ? Color(hex: 0xC27C0E) : Color(hex: 0x1E8F62))
                 }
             }

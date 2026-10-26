@@ -246,7 +246,7 @@ struct NativeSettlementView: View {
             Spacer(minLength: 8)
             HStack(spacing: 6) {
                 navButton("chevron.left", label: "前の月") { Task { await model.go(p.prevMonth) } }
-                Text(p.monthLabel ?? NInvText.monthLabel(p.month)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text(p.monthLabel ?? NInvText.monthLabel(p.month)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                     .frame(minWidth: 120)
                 navButton("chevron.right", label: "次の月") { Task { await model.go(p.nextMonth) } }
                 if !p.isCurrentMonth {
@@ -476,7 +476,7 @@ struct NSettlePlCard: View {
             Text(card.label).font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1)
             HStack(spacing: 6) {
                 if !card.plain { NPBadge(text: loss ? "赤字" : "黒字", color: loss ? NT.danger : NT.ok) }
-                Text(NSettleText.yen(card.value)).font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(tone)
+                Text(NSettleText.yen(card.value)).font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(tone)
                     .lineLimit(1).minimumScaleFactor(0.6)
             }
             Text(card.sub).font(.system(size: 11)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true)
@@ -682,7 +682,7 @@ struct NSettleCostsForm: View {
             Rectangle().fill(NT.line).frame(height: 1)
             HStack(spacing: 10) {
                 Text("月の合計").font(.system(size: 14)).foregroundColor(NT.ink2)
-                Text(NT.yen(fixedTotal + salary)).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                Text(NT.yen(fixedTotal + salary)).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                 Text("（固定費 \(NT.yen(fixedTotal)) ＋ 給料 \(NT.yen(salary))）").font(.system(size: 12)).foregroundColor(NT.ink3)
                 Spacer(minLength: 8)
                 if canEdit {

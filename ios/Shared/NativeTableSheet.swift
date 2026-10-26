@@ -156,7 +156,7 @@ struct NativeTableSheet: View {
                             Text(c.kind == "checkout" ? "お会計希望" : "スタッフ呼び出し").font(.system(size: 13, weight: .bold))
                             Text(NFTime.hm(iso: c.createdAt)).font(.system(size: 11, weight: .medium)).foregroundColor(Color(hex: 0x9B3A2A))
                         }
-                        if let n = c.note { Text(n).font(.system(size: 15, weight: .heavy)) }
+                        if let n = c.note { Text(n).font(.system(size: 15, weight: NT.strong)) }
                     }
                     .foregroundColor(NFColor.callInk)
                     Spacer(minLength: 4)
@@ -415,7 +415,7 @@ struct NativeTableSheet: View {
             HStack(spacing: 8) {
                 stepButton("−", enabled: guestEdit > 1) { guestEdit = max(1, guestEdit - 1) }
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(guestEdit)").font(.system(size: 24, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy)
+                    Text("\(guestEdit)").font(.system(size: 24, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.navy)
                     Text("名").font(.system(size: 13)).foregroundColor(NFColor.ink3)
                 }
                 .frame(maxWidth: .infinity).frame(height: 44)
@@ -536,7 +536,7 @@ struct NativeTableSheet: View {
     private func bigButton(_ ja: String, en: String?, fill: Color, textColor: Color = .white, border: Color? = nil, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Text(ja).font(.system(size: size, weight: .heavy))
+                Text(ja).font(.system(size: size, weight: NT.strong))
                 if let en { Text(en).font(.system(size: 12, weight: .semibold)).opacity(0.8) }
             }
             .foregroundColor(textColor)

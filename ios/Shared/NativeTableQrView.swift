@@ -226,8 +226,8 @@ enum NTQArtist {
     static func storeName(_ name: String, centerX: CGFloat, y: CGFloat, widthMm: CGFloat, brandPt: CGFloat, branchPt: CGFloat, draw: Bool = true) -> CGFloat {
         let (brand, branch) = NTQStoreName.split(name)
         let w = mm(widthMm)
-        let bp = fitPt(brand, width: w, maxPt: brandPt, minPt: brandPt * 0.55, weight: .heavy, track: 0.03)
-        let b = attr(brand, pt: bp, weight: .heavy, color: ink, track: 0.03, lineHeight: 1.2)
+        let bp = fitPt(brand, width: w, maxPt: brandPt, minPt: brandPt * 0.55, weight: NT.strong, track: 0.03)
+        let b = attr(brand, pt: bp, weight: NT.strong, color: ink, track: 0.03, lineHeight: 1.2)
         var h = b.size().height.rounded(.up)
         if draw { line(b, centerX: centerX, y: y, width: w) }
         if let branch {
@@ -243,9 +243,9 @@ enum NTQArtist {
     /// いちばん下の「TENPO ONE」（左右に細い線）
     static func footer(centerX: CGFloat, bottomY: CGFloat, pt: CGFloat, lineMm: CGFloat, gapMm: CGFloat, ruleMm: CGFloat, ctx: CGContext) {
         let s = NSMutableAttributedString()
-        s.append(attr("TENPO", pt: pt, weight: .heavy, color: ink, track: 0.3))
-        s.append(attr(" ", pt: pt, weight: .heavy, color: ink, track: 0.3))
-        s.append(attr("ONE", pt: pt, weight: .heavy, color: terra, track: 0.3))
+        s.append(attr("TENPO", pt: pt, weight: NT.strong, color: ink, track: 0.3))
+        s.append(attr(" ", pt: pt, weight: NT.strong, color: ink, track: 0.3))
+        s.append(attr("ONE", pt: pt, weight: NT.strong, color: terra, track: 0.3))
         let size = s.size()
         let y = bottomY - size.height
         s.draw(at: CGPoint(x: centerX - size.width / 2, y: y))
@@ -291,7 +291,7 @@ enum NTQArtist {
         ctx.setFillColor(terra.cgColor); ctx.fill(CGRect(x: cx - mm(4.5), y: y, width: mm(9), height: mm(0.3)))
         let topEnd = y + mm(0.3)
 
-        let jp = attr("ご注文はスマホから", pt: 7.6, weight: .heavy, color: ink, track: 0.06)
+        let jp = attr("ご注文はスマホから", pt: 7.6, weight: NT.strong, color: ink, track: 0.06)
         let en = attr("ORDER FROM YOUR PHONE", pt: 4, weight: .bold, color: terra, track: 0.24)
         let bottomH = jp.size().height.rounded(.up) + mm(1) + en.size().height.rounded(.up)
         let bottomStart = colBottom - bottomH
@@ -301,7 +301,7 @@ enum NTQArtist {
         let name = card.table.name
         let namePt: CGFloat = name.count <= 4 ? 24 : name.count <= 7 ? 17 : 12
         let label = attr("TABLE", pt: 5, weight: .bold, color: terra, track: 0.42)
-        let big = attr(name, pt: namePt, weight: .heavy, color: ink, track: 0.02, lineHeight: 1.05, wrap: true)
+        let big = attr(name, pt: namePt, weight: NT.strong, color: ink, track: 0.02, lineHeight: 1.05, wrap: true)
         let labelH = label.size().height.rounded(.up)
         let bigH = block(big, centerX: cx, y: 0, width: lw, maxLines: 2, draw: false)
         let midH = labelH + mm(1.2) + bigH
@@ -339,7 +339,7 @@ enum NTQArtist {
         y += mm(1.6)
         let name = card.table.name
         let namePt: CGFloat = name.count <= 4 ? 28 : name.count <= 8 ? 20 : 15
-        y += block(attr(name, pt: namePt, weight: .heavy, color: ink, track: 0.02, lineHeight: 1.05, wrap: true), centerX: cx, y: y, width: contentW, maxLines: 2)
+        y += block(attr(name, pt: namePt, weight: NT.strong, color: ink, track: 0.02, lineHeight: 1.05, wrap: true), centerX: cx, y: y, width: contentW, maxLines: 2)
 
         // 真ん中の組（QR・案内）は、卓番号の下から いちばん下の余白（11mm）までの中央に
         let areaTop = y, areaBottom = inner.maxY - mm(11)
@@ -722,14 +722,14 @@ struct NativeTableQrScreen: View {
                     } else if t.url == nil {
                         VStack(spacing: 4) {
                             Image(systemName: "qrcode").font(.system(size: 36)).foregroundColor(NFColor.ink3.opacity(0.4))
-                            Text("QR停止中").font(.system(size: 12, weight: .heavy)).foregroundColor(NFColor.danger)
+                            Text("QR停止中").font(.system(size: 12, weight: NT.strong)).foregroundColor(NFColor.danger)
                         }
                     } else {
                         ProgressView()
                     }
                 }
                 .frame(height: 120)
-                Text(t.name).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(t.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
             }
             .padding(10)
             .frame(maxWidth: .infinity)
@@ -807,7 +807,7 @@ struct NTQTableSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    Text(table.name).font(.system(size: 30, weight: .heavy)).foregroundColor(NFColor.ink)
+                    Text(table.name).font(.system(size: 30, weight: NT.strong)).foregroundColor(NFColor.ink)
                     if table.url == nil {
                         VStack(spacing: 6) {
                             Image(systemName: "qrcode").font(.system(size: 60)).foregroundColor(NFColor.ink3.opacity(0.4))

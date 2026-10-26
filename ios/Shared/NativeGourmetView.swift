@@ -127,7 +127,7 @@ struct NLSourceChip: View {
     var body: some View {
         HStack(spacing: 2) {
             if auto { Image(systemName: "envelope.fill").font(.system(size: size - 1, weight: .bold)) }
-            Text(style.label).font(.system(size: size, weight: .heavy)).lineLimit(1)
+            Text(style.label).font(.system(size: size, weight: NT.strong)).lineLimit(1)
         }
         .foregroundColor(.white)
         .padding(.horizontal, size * 0.55).padding(.vertical, size * 0.2)
@@ -299,7 +299,7 @@ struct NativeGourmetSheet: View {
         card {
             HStack(spacing: 14) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("グルメサイトメール取り込み").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.ink)
+                    Text("グルメサイトメール取り込み").font(.system(size: 17, weight: NT.strong)).foregroundColor(NLColor.ink)
                     Text(p.enabled ? "利用中（\(p.verifiedCount) サイト設定済）" : "停止中").font(.system(size: 13)).foregroundColor(NLColor.muted)
                 }
                 Spacer()
@@ -411,7 +411,7 @@ struct NativeGourmetSheet: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 14) {
                     HStack(spacing: 10) {
-                        Text(site.name).font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.ink)
+                        Text(site.name).font(.system(size: 22, weight: NT.strong)).foregroundColor(NLColor.ink)
                         statusBadge(site.status)
                     }
                     step("1. 取り込み専用アドレスをコピー") {
@@ -494,7 +494,7 @@ struct NativeGourmetSheet: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "tray.full").foregroundColor(NLColor.blue)
-                Text("取り込み履歴").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("取り込み履歴").font(.system(size: 17, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("Imports").font(.system(size: 11)).foregroundColor(NLColor.muted)
                 if p.pendingReview > 0 {
                     Text("要確認 \(p.pendingReview)").font(.system(size: 12, weight: .bold)).foregroundColor(.white)

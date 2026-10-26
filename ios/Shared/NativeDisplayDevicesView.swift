@@ -193,7 +193,7 @@ struct NativeDisplayDevicesView: View {
                     Text("モニター・タブレットのカメラでこの QR を読んでください").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
                     Text("TENPO ONE のアプリの iPad は、ログイン画面の「この iPad をディスプレイにする」から読みます").font(.system(size: 13)).foregroundColor(NFColor.ink3)
                         .fixedSize(horizontal: false, vertical: true)
-                    Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: .heavy)).foregroundColor(NFColor.iris).monospacedDigit()
+                    Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: NT.strong)).foregroundColor(NFColor.iris).monospacedDigit()
                     NSPButton(text: "一覧を読み直す", icon: "arrow.clockwise") { Task { await model.refresh() } }
                 }
             }

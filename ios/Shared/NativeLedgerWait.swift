@@ -75,7 +75,7 @@ struct NativeLedgerWaitView: View {
     private func queueCard(_ p: NLWaitPayload) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("本日のウェイティング").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("本日のウェイティング").font(.system(size: 17, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("Waiting").font(.system(size: 11)).foregroundColor(NLColor.muted)
                 Text("待ち \(p.waitingNow)組").font(.system(size: 13)).foregroundColor(NLColor.muted)
                 Spacer()
@@ -98,7 +98,7 @@ struct NativeLedgerWaitView: View {
                     ForEach(p.queue) { w in
                         let active = w.status == "waiting" || w.status == "called"
                         HStack(spacing: 12) {
-                            Text("#\(w.ticketNo)").font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.blue).frame(width: 52, alignment: .leading)
+                            Text("#\(w.ticketNo)").font(.system(size: 17, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.blue).frame(width: 52, alignment: .leading)
                             VStack(alignment: .leading, spacing: 1) {
                                 Text("\(w.guestName) 様").font(.system(size: 14, weight: .bold))
                                 if let ph = w.guestPhone { Text(ph).font(.system(size: 11)).foregroundColor(NLColor.muted) }
@@ -131,7 +131,7 @@ struct NativeLedgerWaitView: View {
     private func waitlistCard(_ p: NLWaitPayload) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("キャンセル待ち（満席時の登録）").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("キャンセル待ち（満席時の登録）").font(.system(size: 17, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("Waitlist").font(.system(size: 11)).foregroundColor(NLColor.muted)
                 Spacer()
                 actionPill("plus", "キャンセル待ちを登録", fill: NLColor.navy, ink: .white) { waitlistOpen = true }
@@ -206,7 +206,7 @@ struct NativeLedgerWaitView: View {
     private func actionPill(_ icon: String, _ t: String, fill: Color, ink: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) { Image(systemName: icon); Text(t) }
-                .font(.system(size: 14, weight: .heavy)).foregroundColor(ink)
+                .font(.system(size: 14, weight: NT.strong)).foregroundColor(ink)
                 .padding(.horizontal, 14).frame(height: 40)
                 .background(RoundedRectangle(cornerRadius: 11).fill(fill))
         }.buttonStyle(PressableStyle())
@@ -263,7 +263,7 @@ struct NLWaitTicketSheet: View {
                             model.show(toast: "受付番号 #\(r.queued ?? 0) で登録しました")
                             onClose()
                         } else { problem = model.error; model.error = nil }
-                    } } label: { Text("受付する").fontWeight(.heavy).frame(maxWidth: .infinity) }
+                    } } label: { Text("受付する").fontWeight(NT.strong).frame(maxWidth: .infinity) }
                     .disabled(model.busy || name.trimmingCharacters(in: .whitespaces).isEmpty)
                 }
             }
@@ -308,7 +308,7 @@ struct NLWaitlistSheet: View {
                 Section("メモ") { TextField("任意", text: $note) }
                 if let problem { Section { Text(problem).foregroundColor(NLColor.red) } }
                 Section {
-                    Button { Task { await save() } } label: { Text("登録する").fontWeight(.heavy).frame(maxWidth: .infinity) }
+                    Button { Task { await save() } } label: { Text("登録する").fontWeight(NT.strong).frame(maxWidth: .infinity) }
                         .disabled(model.busy || name.trimmingCharacters(in: .whitespaces).isEmpty || phone.filter(\.isNumber).count < 10)
                 }
             }

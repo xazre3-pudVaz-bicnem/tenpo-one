@@ -112,7 +112,8 @@ enum NLColor {
     static let line = Color(hex: 0xE2E8F0)
     static let ink = Color(hex: 0x212121)
     static let muted = Color(hex: 0x64748B)
-    static let yellow = Color(hex: 0xFFC634)
+    /// iPad はホームの左のバーで選んだボタンと同じ黄色に（黄色を 1 つに。2026-10-27 03:14 Ronnie）。iPhone は今まで通り
+    static let yellow = AppConfig.isPad ? Color(hex: 0xF2D06B) : Color(hex: 0xFFC634)
     static let blue = Color(hex: 0x1863DC)
     static let blueSoft = Color(hex: 0xDBEAFE)
     static let green = Color(hex: 0x00C689)
@@ -585,7 +586,7 @@ struct NativeLedgerView: View {
                 .accessibilityLabel("ホーム")
                 // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text("店舗台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                    Text("店舗台帳").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                     Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
                 }
                 .fixedSize()
@@ -601,7 +602,7 @@ struct NativeLedgerView: View {
                             .frame(width: 46, height: 38)
                             .background(RoundedRectangle(cornerRadius: 10).fill(Color.white.opacity(0.12)))
                         if inbox.unreadNotices > 0 {
-                            Text(inbox.unreadNotices > 99 ? "99+" : "\(inbox.unreadNotices)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                            Text(inbox.unreadNotices > 99 ? "99+" : "\(inbox.unreadNotices)").font(.system(size: 11, weight: NT.strong)).monospacedDigit().foregroundColor(.white)
                                 .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
                                 .background(Capsule().fill(NLColor.red))
                                 .overlay(Capsule().stroke(NLColor.navy, lineWidth: 2))
@@ -618,8 +619,8 @@ struct NativeLedgerView: View {
                 if model.payload?.canWrite ?? false {
                     Button { newOpen = true } label: {
                         HStack(spacing: 5) {
-                            Image(systemName: "plus").font(.system(size: 14, weight: .heavy))
-                            Text("予約登録").font(.system(size: 15, weight: .heavy))
+                            Image(systemName: "plus").font(.system(size: 14, weight: NT.strong))
+                            Text("予約登録").font(.system(size: 15, weight: NT.strong))
                         }
                         .foregroundColor(NLColor.navy)
                         .padding(.horizontal, 14).frame(height: 38)
@@ -646,7 +647,7 @@ struct NativeLedgerView: View {
                 dateSeg("chevron.left", label: "前の日") { model.shiftDate(-1) }
                 HStack(spacing: 10) {
                     Button { goToday() } label: {
-                        Text("今日").font(.system(size: 13, weight: .heavy))
+                        Text("今日").font(.system(size: 13, weight: NT.strong))
                             .foregroundColor(isToday ? NLColor.muted : NLColor.navy)
                             .padding(.horizontal, 8).frame(height: 26)
                             .background(RoundedRectangle(cornerRadius: 6, style: .continuous).fill(isToday ? Color.clear : NLColor.yellow))
@@ -656,8 +657,8 @@ struct NativeLedgerView: View {
                     .accessibilityLabel("今日へ")
                     Button { dateCalendarOpen = true } label: {
                         HStack(spacing: 8) {
-                            Text(dateLabel).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink)
-                            Image(systemName: "chevron.down").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.muted)
+                            Text(dateLabel).font(.system(size: 18, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.ink)
+                            Image(systemName: "chevron.down").font(.system(size: 12, weight: NT.strong)).foregroundColor(NLColor.muted)
                         }
                     }
                     .buttonStyle(PressableStyle())
@@ -721,7 +722,7 @@ struct NativeLedgerView: View {
         let width = nameW + CGFloat(slots) * slotW + 32
         let page = VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("店舗台帳").font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("店舗台帳").font(.system(size: 22, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("\(p.store.name)　\(dateLabel)").font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.muted)
             }
             summaryRow(p)
@@ -771,7 +772,7 @@ struct NativeLedgerView: View {
 
     private func modeBtn(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(text).font(.system(size: 13, weight: .heavy))
+            Text(text).font(.system(size: 13, weight: NT.strong))
                 .foregroundColor(on ? .white : NLColor.muted)
                 .padding(.horizontal, 14).frame(height: 40)
                 .background(RoundedRectangle(cornerRadius: 9).fill(on ? NLColor.navy : Color.clear))
@@ -808,7 +809,7 @@ struct NativeLedgerView: View {
             VStack(alignment: .leading, spacing: 0) {
                 Text(label).font(.system(size: 11, weight: .semibold)).foregroundColor(NLColor.muted)
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(value).font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink)
+                    Text(value).font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.ink)
                     Text(unit).font(.system(size: 11)).foregroundColor(NLColor.muted)
                     if let sub { Text(sub).font(.system(size: 11, weight: .semibold)).foregroundColor(NLColor.muted).padding(.leading, 4) }
                 }
@@ -858,7 +859,7 @@ struct NativeLedgerView: View {
             Rectangle().fill(NLColor.line).frame(height: 1)
             ForEach(Array(rows.enumerated()), id: \.offset) { _, row in
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(row.name).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink).lineLimit(1)
+                    Text(row.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink).lineLimit(1)
                     Text(row.status).font(.system(size: 11)).foregroundColor(NLColor.muted).lineLimit(1)
                 }
                 .padding(.leading, 12)
@@ -1076,7 +1077,7 @@ struct NativeLedgerView: View {
                         Text("\(nlHm(q.minute))〜").monospacedDigit()
                         Spacer(minLength: 0)
                     }
-                    .font(.system(size: 13, weight: .heavy)).foregroundColor(Color(hex: 0x05603A))
+                    .font(.system(size: 13, weight: NT.strong)).foregroundColor(Color(hex: 0x05603A))
                     .padding(.horizontal, 10)
                     .frame(width: slotW * 3, height: rowH - 12)
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(NLColor.greenSoft.opacity(0.85)))
@@ -1120,12 +1121,12 @@ struct NativeLedgerView: View {
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 4) {
                                     Text("\(nlHm(s))").font(.system(size: 11, weight: .bold)).monospacedDigit()
-                                    Text("\(stripSama(r.guestName)) 様").font(.system(size: 13, weight: .heavy)).lineLimit(1)
+                                    Text("\(stripSama(r.guestName)) 様").font(.system(size: 13, weight: NT.strong)).lineLimit(1)
                                 }
                                 HStack(spacing: 5) {
                                     Text(r.partyLabel).font(.system(size: 11, weight: .bold))
                                     if let chip = sourceChip(r, p: p) {
-                                        Text(chip.text).font(.system(size: 9, weight: .heavy)).lineLimit(1)
+                                        Text(chip.text).font(.system(size: 9, weight: NT.strong)).lineLimit(1)
                                             .foregroundColor(chip.darkText ? NLColor.ink : .white)
                                             .padding(.horizontal, 6).padding(.vertical, 2)
                                             .background(Capsule().fill(chip.color))
@@ -1133,7 +1134,7 @@ struct NativeLedgerView: View {
                                     if let fs {
                                         // フロアと同じ状態と残り時間
                                         Text(fs.band.jp + (fs.left.map { $0 > 0 ? "・残\($0)分" : "・超過\(-$0)分" } ?? ""))
-                                            .font(.system(size: 10, weight: .heavy)).monospacedDigit()
+                                            .font(.system(size: 10, weight: NT.strong)).monospacedDigit()
                                             .foregroundColor(stateInk)
                                     } else {
                                         Text(late ? "未連絡" : (p.statusLabels[r.status] ?? r.status)).font(.system(size: 10, weight: .bold))
@@ -1201,7 +1202,7 @@ struct NativeLedgerView: View {
         let totalGuests = live.reduce(0) { $0 + $1.partySize }
         return VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .firstTextBaseline) {
-                Text("グルメ別").font(.system(size: 18, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("グルメ別").font(.system(size: 18, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("Gourmet").font(.system(size: 11)).foregroundColor(NLColor.muted)
                 Text(p.date.replacingOccurrences(of: "-", with: "/")).font(.system(size: 13)).foregroundColor(NLColor.muted)
                 Spacer()
@@ -1221,9 +1222,9 @@ struct NativeLedgerView: View {
                                 Text(g.name).font(.system(size: 12, weight: .medium)).foregroundColor(NLColor.muted).lineLimit(1)
                             }
                             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                                Text("\(g.rows.count)").font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.blue)
+                                Text("\(g.rows.count)").font(.system(size: 22, weight: NT.strong)).foregroundColor(NLColor.blue)
                                 Text("組").font(.system(size: 12)).foregroundColor(NLColor.muted)
-                                Text("\(g.guests)").font(.system(size: 22, weight: .heavy)).foregroundColor(NLColor.ink)
+                                Text("\(g.guests)").font(.system(size: 22, weight: NT.strong)).foregroundColor(NLColor.ink)
                                 Text("名").font(.system(size: 12)).foregroundColor(NLColor.muted)
                             }.monospacedDigit()
                         }
@@ -1303,7 +1304,7 @@ struct NativeLedgerView: View {
                                 .font(.system(size: 15, weight: .bold)).monospacedDigit().foregroundColor(NLColor.ink).frame(width: 130, alignment: .leading)
                             VStack(alignment: .leading, spacing: 2) {
                                 HStack(spacing: 6) {
-                                    Text("\(stripSama(r.guestName)) 様").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.ink)
+                                    Text("\(stripSama(r.guestName)) 様").font(.system(size: 16, weight: NT.strong)).foregroundColor(NLColor.ink)
                                     if let st = NLSource.style(for: r, in: p) { NLSourceChip(style: st, auto: r.createdVia == "gourmet_mail", size: 10) }
                                 }
                                 Text([r.sourceName, r.courseName, r.tags?.joined(separator: " ")].compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " ・ "))

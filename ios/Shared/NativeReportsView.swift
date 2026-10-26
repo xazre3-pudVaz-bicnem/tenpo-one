@@ -157,7 +157,7 @@ struct NativeReportsView: View {
 
     private func card<C: View>(_ title: String, @ViewBuilder _ c: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
             c()
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
@@ -191,13 +191,13 @@ struct NativeReportsView: View {
                 ForEach(p.plSteps, id: \.self) { s in
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 10) {
-                            Text(s.label).font(.system(size: 13.5, weight: s.emphasis == true ? .heavy : .semibold)).foregroundColor(NFColor.navy).frame(width: 130, alignment: .leading)
+                            Text(s.label).font(.system(size: 13.5, weight: s.emphasis == true ? NT.strong : .semibold)).foregroundColor(NFColor.navy).frame(width: 130, alignment: .leading)
                             GeometryReader { g in
                                 RoundedRectangle(cornerRadius: 4)
                                     .fill(s.isDeduction == true ? NFColor.danger.opacity(0.25) : s.emphasis == true ? NFColor.iris : NFColor.iris.opacity(0.35))
                                     .frame(width: max(2, g.size.width * CGFloat(Double(abs(s.amount)) / Double(maxV))))
                             }.frame(height: 18)
-                            Text("\(s.isDeduction == true ? "−" : "")\(NT.yen(s.amount))").font(.system(size: 14, weight: s.emphasis == true ? .heavy : .bold)).monospacedDigit()
+                            Text("\(s.isDeduction == true ? "−" : "")\(NT.yen(s.amount))").font(.system(size: 14, weight: s.emphasis == true ? NT.strong : .bold)).monospacedDigit()
                                 .foregroundColor(s.isDeduction == true ? NFColor.danger : NFColor.navy).frame(width: 130, alignment: .trailing)
                         }
                         if let n = s.note, !n.isEmpty { Text(n).font(.system(size: 11)).foregroundColor(NFColor.ink3).padding(.leading, 140) }
@@ -237,7 +237,7 @@ struct NativeReportsView: View {
     private func mini(_ label: String, _ value: String, tone: Color = NFColor.navy, sub: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(size: 11.5, weight: .bold)).foregroundColor(NFColor.ink3)
-            Text(value).font(.system(size: 19, weight: .heavy)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.system(size: 19, weight: NT.strong)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.7)
             if let sub { Text(sub).font(.system(size: 10.5)).foregroundColor(NFColor.ink3) }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(12)
@@ -257,7 +257,7 @@ struct NativeReportsView: View {
                 mrow("人件費（概算）", p.monthlyPl.map { AnyView(Text(NT.yen($0.labor))) })
                 mrow("経費", p.monthlyPl.map { AnyView(Text(NT.yen($0.expense))) })
                 mrow("店舗利益", p.monthlyPl.map { m in AnyView(VStack(alignment: .trailing, spacing: 1) {
-                    Text(NT.yen(m.profit)).fontWeight(.heavy).foregroundColor(m.profit >= 0 ? green : NFColor.danger)
+                    Text(NT.yen(m.profit)).fontWeight(NT.strong).foregroundColor(m.profit >= 0 ? green : NFColor.danger)
                     if let b = m.budgetProfit { Text("（予算比\(b != 0 ? String(format: "%.0f", Double(m.profit) / Double(b) * 100) : "0")%）").font(.system(size: 11)).foregroundColor(m.profit >= b ? green : NFColor.danger) }
                 }) })
             }
@@ -279,7 +279,7 @@ struct NativeReportsView: View {
     private func kpi(_ label: String, _ value: String, tone: Color = NFColor.navy, sub: AnyView? = nil) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.system(size: 11.5, weight: .bold)).foregroundColor(NFColor.ink3).lineLimit(1)
-            Text(value).font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.7)
             if let sub { sub }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(12)

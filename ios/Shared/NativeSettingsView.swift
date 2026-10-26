@@ -210,7 +210,7 @@ struct NativeSettingsView: View {
 
     private func sideHeader(_ title: String, en: String) -> some View {
         // 英語は出さない（2026-10-24 18:40 Ronnie「いまは日本語だけでいい」）
-        Text(title).font(.system(size: 13, weight: .heavy)).foregroundColor(NFColor.ink3)
+        Text(title).font(.system(size: 13, weight: NT.strong)).foregroundColor(NFColor.ink3)
             .padding(.horizontal, 4).padding(.bottom, 4)
     }
 
@@ -286,7 +286,7 @@ struct NativeSettingsView: View {
     private func pageTitle(_ icon: String, _ title: String, en: String, status: (String, Color)?) -> some View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 24, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(title).font(.system(size: 24, weight: NT.strong)).foregroundColor(NFColor.navy)
                 if let status {
                     HStack(spacing: 5) {
                         Circle().fill(status.1).frame(width: 7, height: 7)
@@ -322,7 +322,7 @@ struct NativeSettingsView: View {
                         }
                         Spacer(minLength: 8)
                         if native == nil && it.allowed {
-                            Text("Web").font(.system(size: 10.5, weight: .heavy)).foregroundColor(NFColor.ink3)
+                            Text("Web").font(.system(size: 10.5, weight: NT.strong)).foregroundColor(NFColor.ink3)
                                 .padding(.horizontal, 7).padding(.vertical, 3)
                                 .overlay(Capsule().stroke(NFColor.line, lineWidth: 1))
                         }
@@ -453,7 +453,7 @@ struct NativeSettingsView: View {
         VStack(alignment: .leading, spacing: 0) {
             // 見本（Funfo の「receipt printer setting」）と同じく、印は置かず見出しと線だけ（2026-10-24 18:44 Ronnie「スタイルはこれ」）
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(title).font(.system(size: 18, weight: NT.strong)).foregroundColor(NFColor.navy)
                 if !description.isEmpty { Text(description).font(.system(size: 13)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -700,7 +700,7 @@ struct NativeSettingsView: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle().stroke(on ? NFColor.iris : NFColor.line, lineWidth: 1.5).frame(width: 22, height: 22)
-                    if on { Circle().fill(NFColor.iris).frame(width: 22, height: 22); Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).foregroundColor(.white) }
+                    if on { Circle().fill(NFColor.iris).frame(width: 22, height: 22); Image(systemName: "checkmark").font(.system(size: 12, weight: NT.strong)).foregroundColor(.white) }
                 }
                 VStack(alignment: .leading, spacing: 1) {
                     Text(label).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)

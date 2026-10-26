@@ -145,7 +145,7 @@ struct NativeBookingSettingsView: View {
             Spacer()
             VStack(spacing: 12) {
                 Image(systemName: "lock.shield").font(.system(size: 40, weight: .semibold)).foregroundColor(NFColor.ink3)
-                Text("管理画面で変更してください").font(.system(size: 20, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("管理画面で変更してください").font(.system(size: 20, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Text(p.adminOnlyNote).font(.system(size: 14)).foregroundColor(NFColor.ink2).multilineTextAlignment(.center).frame(maxWidth: 520)
             }
             .padding(32)
@@ -316,7 +316,7 @@ struct NativeBookingSettingsView: View {
                 Text(form == p.settings ? "変更はありません" : "未保存の変更があります").font(.system(size: 13)).foregroundColor(NFColor.ink3)
                 Button { Task { await save() } } label: {
                     HStack(spacing: 6) { Image(systemName: "square.and.arrow.down"); Text(model.busy ? "保存中…" : "保存する") }
-                        .font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                        .font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 30).frame(height: 54)
                         .background(RoundedRectangle(cornerRadius: 14).fill(NFColor.iris))
                 }
@@ -334,7 +334,7 @@ struct NativeBookingSettingsView: View {
     private func divider(_ title: String) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Rectangle().fill(NFColor.line).frame(height: 1)
-            Text(title).font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text(title).font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.navy)
         }
         .padding(.top, 4)
     }

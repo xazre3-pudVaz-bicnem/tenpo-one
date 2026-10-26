@@ -132,7 +132,7 @@ struct NativeQuickPayView: View {
     private var header: some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
-                Text("クラシックレジ").font(.system(size: 15, weight: .heavy)).tracking(1.8).foregroundColor(NFColor.royal)
+                Text("クラシックレジ").font(.system(size: 15, weight: NT.strong)).tracking(1.8).foregroundColor(NFColor.royal)
                 Text("CLASSIC REGISTER").font(.system(size: 10, weight: .bold)).tracking(3).foregroundColor(NFColor.ink3)
             }
             Spacer()
@@ -184,9 +184,9 @@ struct NativeQuickPayView: View {
                         Text(amount > 0 ? "\(amount)" : "_").foregroundColor(amount > 0 ? .white : .white.opacity(0.4))
                         Text("= \(NT.yen(pendingTotal))").font(.system(size: 24, weight: .bold)).foregroundColor(.white.opacity(0.7))
                     }
-                    .font(.system(size: 38, weight: .heavy)).monospacedDigit()
+                    .font(.system(size: 38, weight: NT.strong)).monospacedDigit()
                 } else {
-                    Text(NT.yen(amount)).font(.system(size: 44, weight: .heavy)).monospacedDigit()
+                    Text(NT.yen(amount)).font(.system(size: 44, weight: NT.strong)).monospacedDigit()
                 }
             }
             .foregroundColor(.white)
@@ -251,7 +251,7 @@ struct NativeQuickPayView: View {
         }()
         return Button(action: action) {
             VStack(spacing: 0) {
-                Text(label).font(.system(size: big ? 30 : 20, weight: .heavy)).monospacedDigit()
+                Text(label).font(.system(size: big ? 30 : 20, weight: NT.strong)).monospacedDigit()
                 if let en { Text(en).font(.system(size: 9.5, weight: .bold)).opacity(0.7).lineLimit(1) }
             }
             .foregroundColor(ink)
@@ -314,12 +314,12 @@ struct NativeQuickPayView: View {
                 Text("合計").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.navy)
                 Text("Total（税込）").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                 Spacer()
-                Text(NT.yen(total)).font(.system(size: 34, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.royal)
+                Text(NT.yen(total)).font(.system(size: 34, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.royal)
             }
             Button { Task { await checkout() } } label: {
                 HStack(spacing: 8) {
                     Image(systemName: "wallet.pass").font(.system(size: 22))
-                    Text(model.busy ? "準備中…" : "会計する").font(.system(size: 22, weight: .heavy))
+                    Text(model.busy ? "準備中…" : "会計する").font(.system(size: 22, weight: NT.strong))
                     Text("Checkout").font(.system(size: 12, weight: .semibold)).opacity(0.75)
                 }
                 .foregroundColor(.white)
@@ -390,7 +390,7 @@ struct NativeQuickPayView: View {
                         Text("会計済 \(paid.count)件").font(.system(size: 14, weight: .semibold))
                         Text("Paid").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                         Spacer()
-                        Text(NT.yen(paid.reduce(0) { $0 + $1.total })).font(.system(size: 20, weight: .heavy)).monospacedDigit()
+                        Text(NT.yen(paid.reduce(0) { $0 + $1.total })).font(.system(size: 20, weight: NT.strong)).monospacedDigit()
                     }
                 }
                 Section(footer: Text("テーブルの会計は入りません。全部の伝票は「伝票明細」で見られます。")) {
@@ -413,7 +413,7 @@ struct NativeQuickPayView: View {
                                     .font(.system(size: 12)).foregroundColor(NFColor.ink3)
                             }
                             Spacer()
-                            Text(NT.yen(h.total)).font(.system(size: 16, weight: .heavy)).monospacedDigit()
+                            Text(NT.yen(h.total)).font(.system(size: 16, weight: NT.strong)).monospacedDigit()
                             if open {
                                 Button("開く") { historyOpen = false; model.orderId = h.id; Task { await model.refresh() } }.buttonStyle(.borderedProminent)
                             } else {

@@ -316,7 +316,7 @@ struct NativeOnboardingView: View {
 
     private var header: some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("初期導入ウィザード").font(.system(size: 22, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text("初期導入ウィザード").font(.system(size: 22, weight: NT.strong)).foregroundColor(NFColor.navy)
             Text("ステップ \(model.step) / 10 — \(model.title)").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink3)
             HStack(spacing: 4) {
                 ForEach(1...10, id: \.self) { n in

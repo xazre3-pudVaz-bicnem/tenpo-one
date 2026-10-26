@@ -232,10 +232,10 @@ struct NativeReservationSheet: View {
         return HStack(alignment: .top, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text("\(stripSama(r.guestName)) 様").font(.system(size: 26, weight: .heavy)).foregroundColor(NLColor.ink)
+                    Text("\(stripSama(r.guestName)) 様").font(.system(size: 26, weight: NT.strong)).foregroundColor(NLColor.ink)
                     if let k = r.guestNameKana, !k.isEmpty { Text(k).font(.system(size: 13)).foregroundColor(NLColor.muted) }
                     if let v = r.visitCount, v >= 2 {
-                        Text("\(v)回目").font(.system(size: 11, weight: .heavy)).foregroundColor(NLColor.blue)
+                        Text("\(v)回目").font(.system(size: 11, weight: NT.strong)).foregroundColor(NLColor.blue)
                             .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(NLColor.blueSoft))
                     }
                 }
@@ -252,7 +252,7 @@ struct NativeReservationSheet: View {
             }
             Spacer()
             Text(late ? "未連絡" : (p?.statusLabels[r.status] ?? r.status))
-                .font(.system(size: 14, weight: .heavy)).foregroundColor(tone.1)
+                .font(.system(size: 14, weight: NT.strong)).foregroundColor(tone.1)
                 .padding(.horizontal, 14).padding(.vertical, 8).background(Capsule().fill(tone.0))
         }
     }
@@ -319,7 +319,7 @@ struct NativeReservationSheet: View {
     private func bigButton(_ ja: String, en: String, fill: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 1) {
-                Text(ja).font(.system(size: 17, weight: .heavy))
+                Text(ja).font(.system(size: 17, weight: NT.strong))
                 Text(en).font(.system(size: 11, weight: .bold)).opacity(0.8)
             }
             .foregroundColor(.white)
@@ -332,7 +332,7 @@ struct NativeReservationSheet: View {
     private func outlineButton(_ ja: String, en: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 1) {
-                Text(ja).font(.system(size: 15, weight: .heavy))
+                Text(ja).font(.system(size: 15, weight: NT.strong))
                 Text(en).font(.system(size: 10, weight: .bold)).opacity(0.8)
             }
             .foregroundColor(color)

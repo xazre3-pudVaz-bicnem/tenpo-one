@@ -151,7 +151,7 @@ struct NativeExpensesView: View {
                                 ForEach(p.monthTotals, id: \.self) { t in
                                     VStack(alignment: .leading, spacing: 4) {
                                         Text("\(t.name)（当月）").font(.system(size: 11)).foregroundColor(NFColor.ink3).lineLimit(1)
-                                        Text(NT.yen(t.total)).font(.system(size: 19, weight: .heavy)).monospacedDigit()
+                                        Text(NT.yen(t.total)).font(.system(size: 19, weight: NT.strong)).monospacedDigit()
                                     }
                                     .frame(maxWidth: .infinity, alignment: .leading).padding(12)
                                     .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
@@ -225,9 +225,9 @@ struct NativeExpensesView: View {
         if !(n.announcements.isEmpty && n.alerts.isEmpty && n.autoNotices.isEmpty && n.todos.isEmpty) {
             VStack(alignment: .leading, spacing: 8) {
                 HStack {
-                    Text("お知らせ&アラート").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+                    Text("お知らせ&アラート").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
                     if n.unreadCount + n.alertCount > 0 {
-                        Text("\(n.unreadCount + n.alertCount)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                        Text("\(n.unreadCount + n.alertCount)").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.danger))
                     }
                     Spacer()
@@ -248,7 +248,7 @@ struct NativeExpensesView: View {
                             Button { onWeb(t.href) } label: {
                                 HStack(spacing: 6) {
                                     Text(t.label).font(.system(size: 12.5, weight: .bold))
-                                    Text(t.valueLabel ?? "\(t.count)").font(.system(size: 12, weight: .heavy)).foregroundColor(.white)
+                                    Text(t.valueLabel ?? "\(t.count)").font(.system(size: 12, weight: NT.strong)).foregroundColor(.white)
                                         .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.royal))
                                 }
                                 .foregroundColor(NFColor.royal).padding(.horizontal, 10).frame(height: 32)
@@ -437,7 +437,7 @@ struct NEExpenseSheet: View {
                     Section("営業日") { DatePicker("営業日", selection: $date, displayedComponents: .date) }
                     if let problem { Section { Text(problem).foregroundColor(NFColor.danger) } }
                     Section {
-                        Button { Task { await submit() } } label: { Text(model.busy ? "登録中…" : "登録する").fontWeight(.heavy).frame(maxWidth: .infinity) }.disabled(model.busy)
+                        Button { Task { await submit() } } label: { Text(model.busy ? "登録中…" : "登録する").fontWeight(NT.strong).frame(maxWidth: .infinity) }.disabled(model.busy)
                     }
                 }
             }
@@ -453,7 +453,7 @@ struct NEExpenseSheet: View {
             HStack {
                 Text(label).foregroundColor(NFColor.ink)
                 Spacer()
-                Text((Int(v) ?? 0).formatted()).font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(target == key ? NFColor.royal : NFColor.ink)
+                Text((Int(v) ?? 0).formatted()).font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(target == key ? NFColor.royal : NFColor.ink)
                 Text("円").foregroundColor(NFColor.ink3)
             }
             .padding(.vertical, 4)
@@ -512,7 +512,7 @@ struct NEBillSheet: View {
                     TextField("例：Komaki（仕入先を選ぶと自動で入ります）", text: $vendorName)
                 }
                 Section("金額（税込）") {
-                    HStack { Spacer(); Text((Int(amount) ?? 0).formatted()).font(.system(size: 26, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.royal); Text("円") }
+                    HStack { Spacer(); Text((Int(amount) ?? 0).formatted()).font(.system(size: 26, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.royal); Text("円") }
                     NCKeypad { k in
                         switch k {
                         case "C": amount = ""
@@ -526,7 +526,7 @@ struct NEBillSheet: View {
                 Section("メモ") { TextField("任意", text: $memo) }
                 if let problem { Section { Text(problem).foregroundColor(NFColor.danger) } }
                 Section {
-                    Button { Task { await submit() } } label: { Text(model.busy ? "登録中…" : "登録する").fontWeight(.heavy).frame(maxWidth: .infinity) }.disabled(model.busy)
+                    Button { Task { await submit() } } label: { Text(model.busy ? "登録中…" : "登録する").fontWeight(NT.strong).frame(maxWidth: .infinity) }.disabled(model.busy)
                 }
             }
             .navigationTitle("仕入の請求書を登録")

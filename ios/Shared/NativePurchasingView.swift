@@ -653,7 +653,7 @@ struct NUPoNewView: View {
                             Spacer()
                             niSmallButton("キャンセル") { onClose() }.frame(height: 52).disabled(model.busy)
                             Button { Task { await create() } } label: {
-                                Text(model.busy ? "作成中…" : "発注書を作成").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                                Text(model.busy ? "作成中…" : "発注書を作成").font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                                     .padding(.horizontal, 24).frame(height: 52)
                                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NFColor.iris))
                             }.buttonStyle(PressableStyle()).disabled(model.busy)
@@ -756,7 +756,7 @@ struct NUPoNewView: View {
                 HStack { Text("小計（税抜）"); Spacer(); Text(NT.yen(s)).monospacedDigit() }.font(.system(size: 14)).foregroundColor(NFColor.ink2)
                 HStack { Text("消費税"); Spacer(); Text(NT.yen(t)).monospacedDigit() }.font(.system(size: 14)).foregroundColor(NFColor.ink2)
                 Rectangle().fill(NFColor.line).frame(height: 1)
-                HStack { Text("合計（税込）").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2); Spacer(); Text(NT.yen(s + t)).font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy) }
+                HStack { Text("合計（税込）").font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2); Spacer(); Text(NT.yen(s + t)).font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.navy) }
             }
             .padding(14).frame(width: 320)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NFColor.lilacSoft))

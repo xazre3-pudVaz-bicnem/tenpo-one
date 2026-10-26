@@ -311,7 +311,7 @@ struct NLVStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 30, weight: .heavy)).monospacedDigit().foregroundColor(color).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 30, weight: NT.strong)).monospacedDigit().foregroundColor(color).lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(16).frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
@@ -535,7 +535,7 @@ struct NLVAdminSection: View {
                             Text("\(NATTime.num(b.granted))日").monospacedDigit().frame(width: 120, alignment: .trailing)
                             Text("\(NATTime.num(b.taken))日").monospacedDigit().frame(width: 80, alignment: .trailing)
                             Text("\(NATTime.num(b.expired))日").monospacedDigit().frame(width: 80, alignment: .trailing)
-                            Text("\(NATTime.num(b.remaining))日").font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                            Text("\(NATTime.num(b.remaining))日").font(.system(size: 15, weight: NT.strong)).monospacedDigit()
                                 .foregroundColor(b.remaining < 0 ? NT.danger : NT.ink).frame(width: 90, alignment: .trailing)
                         }
                         .font(.system(size: 15)).foregroundColor(NT.ink)

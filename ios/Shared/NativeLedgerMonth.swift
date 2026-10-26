@@ -70,7 +70,7 @@ struct NativeLedgerMonthView: View {
         let m = Int(month.suffix(2)) ?? 1
         return HStack(alignment: .firstTextBaseline, spacing: 8) {
             Button { shift(-1) } label: { Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold)).frame(width: 36, height: 36).background(Circle().fill(NLColor.graySoft)) }.buttonStyle(.plain)
-            Text("\(String(y))年\(m)月").font(.system(size: 20, weight: .heavy)).foregroundColor(NLColor.navy)
+            Text("\(String(y))年\(m)月").font(.system(size: 20, weight: NT.strong)).foregroundColor(NLColor.navy)
             Text(english[max(0, min(11, m - 1))]).font(.system(size: 11)).foregroundColor(NLColor.muted)
             Button { shift(1) } label: { Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold)).frame(width: 36, height: 36).background(Circle().fill(NLColor.graySoft)) }.buttonStyle(.plain)
             if let p = payload, p.month != String(p.today.prefix(7)) {

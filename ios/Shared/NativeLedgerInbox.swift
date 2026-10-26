@@ -123,7 +123,7 @@ struct NLInboxSheet: View {
             VStack(spacing: 0) {
                 HStack(spacing: 8) {
                     Image(systemName: tab == .messages ? "envelope" : "checklist").font(.system(size: 16, weight: .semibold)).foregroundColor(NLColor.navy)
-                    Text(tab == .messages ? "メッセージ" : "予約受付管理").font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Text(tab == .messages ? "メッセージ" : "予約受付管理").font(.system(size: 17, weight: NT.strong)).foregroundColor(NLColor.navy)
                     Text(tab == .messages ? "新しい予約・変更・キャンセルのお知らせ（14 日分）" : "済ませると消えます")
                         .font(.system(size: 12, weight: .semibold)).foregroundColor(NLColor.muted).lineLimit(1)
                     Spacer()
@@ -207,7 +207,7 @@ struct NLInboxSheet: View {
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(color))
             Button { open(t.date) } label: {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(t.title).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink).lineLimit(1)
+                    Text(t.title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink).lineLimit(1)
                     Text(t.detail).font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(1)
                     if let n = t.note, !n.isEmpty { Text(n).font(.system(size: 12)).foregroundColor(NLColor.muted).lineLimit(2) }
                 }
@@ -219,7 +219,7 @@ struct NLInboxSheet: View {
                 Button { Task { await run(t, a.act, a.id) } } label: {
                     Group {
                         if inbox.busyKey == t.key { ProgressView() }
-                        else { Text(a.label).font(.system(size: 14, weight: .heavy)) }
+                        else { Text(a.label).font(.system(size: 14, weight: NT.strong)) }
                     }
                     .foregroundColor(NLColor.navy)
                     .padding(.horizontal, 14).frame(height: 40)
@@ -243,9 +243,9 @@ struct NLInboxSheet: View {
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(color))
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(n.title).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink).lineLimit(1)
+                        Text(n.title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink).lineLimit(1)
                         if inbox.isNew(n) {
-                            Text("新着").font(.system(size: 10, weight: .heavy)).foregroundColor(.white)
+                            Text("新着").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white)
                                 .padding(.horizontal, 6).padding(.vertical, 2).background(Capsule().fill(NLColor.red))
                         }
                     }

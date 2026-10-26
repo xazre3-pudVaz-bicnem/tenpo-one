@@ -323,7 +323,7 @@ struct NativeMenuScanScreen: View {
         NSPCard(title: "登録しました") {
             VStack(alignment: .leading, spacing: 6) {
                 Text("登録 \(res.inserted)件　スキップ \(res.skipped)件\(res.updated.map { "　更新 \($0)件" } ?? "")")
-                    .font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.success)
+                    .font(.system(size: 16, weight: NT.strong)).foregroundColor(NFColor.success)
                 ForEach(res.failed) { f in
                     Text("\(f.rowNumber)行目：\(f.reason)").font(.system(size: 13)).foregroundColor(NFColor.danger)
                 }

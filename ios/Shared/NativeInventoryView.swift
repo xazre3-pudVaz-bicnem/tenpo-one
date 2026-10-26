@@ -390,7 +390,7 @@ func niCard<C: View>(@ViewBuilder _ c: () -> C) -> some View {
 func niStat(_ label: String, _ value: String, tone: Color = NFColor.navy, sub: String? = nil) -> some View {
     VStack(alignment: .leading, spacing: 4) {
         Text(label).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
-        Text(value).font(.system(size: 24, weight: .heavy)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.6)
+        Text(value).font(.system(size: 24, weight: NT.strong)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.6)
         if let sub { Text(sub).font(.system(size: 11)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
     }
     .padding(14).frame(maxWidth: .infinity, alignment: .leading)
@@ -428,7 +428,7 @@ struct NIDialogHead: View {
     let onClose: () -> Void
     var body: some View {
         HStack {
-            Text(title).font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy).lineLimit(2)
+            Text(title).font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy).lineLimit(2)
             Spacer()
             Button(action: onClose) {
                 Image(systemName: "xmark.circle.fill").font(.system(size: 26)).foregroundColor(NFColor.ink3)
@@ -457,7 +457,7 @@ struct NIDialogFoot: View {
                         .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NFColor.line, lineWidth: 1))
                 }.buttonStyle(PressableStyle()).disabled(busy)
                 Button(action: onOk) {
-                    Text(busy ? busyText : okText).font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                    Text(busy ? busyText : okText).font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 54)
                         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(danger ? NFColor.danger : NFColor.iris))
                 }.buttonStyle(PressableStyle()).disabled(busy)
@@ -1084,7 +1084,7 @@ struct NICountView: View {
                         Button(action: onClose) {
                             HStack(spacing: 3) { Image(systemName: "chevron.left"); Text("在庫へ戻る") }.font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.royal)
                         }.buttonStyle(.plain)
-                        Text("棚卸：\(NI.date(d.countDate))").font(.system(size: 20, weight: .heavy)).foregroundColor(NFColor.navy)
+                        Text("棚卸：\(NI.date(d.countDate))").font(.system(size: 20, weight: NT.strong)).foregroundColor(NFColor.navy)
                         Text(d.storeName).font(.system(size: 14)).foregroundColor(NFColor.ink3)
                         if let s = NI.countStatus[d.status] { NPBadge(text: s.0, color: s.1) }
                         Spacer()
@@ -1174,7 +1174,7 @@ struct NICountView: View {
                 niSmallButton(model.busy ? "保存中…" : "一時保存する", icon: "tray.and.arrow.down") { Task { await save(finalize: false) } }
                     .frame(height: 50).disabled(model.busy)
                 Button { confirmOpen = true } label: {
-                    Text("棚卸を確定する").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                    Text("棚卸を確定する").font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 22).frame(height: 50)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NFColor.iris))
                 }.buttonStyle(PressableStyle()).disabled(model.busy)
@@ -1489,7 +1489,7 @@ struct NIReorderTab: View {
                         var c = URLComponents(); c.queryItems = [URLQueryItem(name: "items", value: items)]
                         onWeb("/app/purchases/new?\(c.percentEncodedQuery ?? "")")
                     } label: {
-                        Text("選択品目で発注書を作成（\(selected.count)件）").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                        Text("選択品目で発注書を作成（\(selected.count)件）").font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 22).frame(height: 52)
                             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(selected.isEmpty ? NFColor.ink3 : NFColor.iris))
                     }.buttonStyle(PressableStyle()).disabled(selected.isEmpty)

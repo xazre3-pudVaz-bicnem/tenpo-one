@@ -73,7 +73,7 @@ struct NWKCard<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                     if let note { Text(note).font(.system(size: 12.5)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 8)

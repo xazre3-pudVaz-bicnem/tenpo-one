@@ -35,7 +35,7 @@ struct NativeSlideToConfirm: View {
                     .fill(Color.white.opacity(0.10))
                     .frame(width: knob + pad * 2 + x)
                 VStack(spacing: 2) {
-                    Text(label).font(.system(size: 20, weight: .heavy))
+                    Text(label).font(.system(size: 20, weight: NT.strong))
                     Text(hint).font(.system(size: 11, weight: .bold)).opacity(0.8)
                 }
                 .foregroundColor(.white)
@@ -54,7 +54,7 @@ struct NativeSlideToConfirm: View {
                         ProgressView().tint(OV.primary)
                     } else {
                         Image(systemName: progress >= 0.9 ? "checkmark" : "chevron.right.2")
-                            .font(.system(size: 22, weight: .heavy))
+                            .font(.system(size: 22, weight: NT.strong))
                             .foregroundColor(OV.primary)
                     }
                 }

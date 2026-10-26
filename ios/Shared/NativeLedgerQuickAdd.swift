@@ -45,9 +45,9 @@ struct NLQuickAddPanel: View {
             // 左：キーワード
             VStack(alignment: .leading, spacing: 12) {
                 // 当たり前のもの（飲み放題・誕生日…）は印つきでいちばん上に（2026-10-24 21:18 Ronnie）
-                Text("よく使うもの").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("よく使うもの").font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.navy)
                 NRWStandardKeysPicker(selected: $tags, columns: 2, height: 44)
-                Text("キーワード").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy).padding(.top, 4)
+                Text("キーワード").font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.navy).padding(.top, 4)
                 if !loaded {
                     ProgressView().frame(maxWidth: .infinity)
                 } else if keywords.isEmpty {
@@ -84,15 +84,15 @@ struct NLQuickAddPanel: View {
                     VStack(alignment: .leading, spacing: 2) {
                         Text("\(slot.tableName)・\(nlHm(slot.minute))〜").font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundColor(.white.opacity(0.75))
                         HStack(alignment: .firstTextBaseline, spacing: 4) {
-                            Text(partyText.isEmpty ? "—" : partyText).font(.system(size: 36, weight: .heavy)).monospacedDigit()
-                            if let m = maxText { Text("〜\(m.isEmpty ? "？" : m)").font(.system(size: 30, weight: .heavy)).monospacedDigit() }
+                            Text(partyText.isEmpty ? "—" : partyText).font(.system(size: 36, weight: NT.strong)).monospacedDigit()
+                            if let m = maxText { Text("〜\(m.isEmpty ? "？" : m)").font(.system(size: 30, weight: NT.strong)).monospacedDigit() }
                             Text("名").font(.system(size: 17, weight: .bold)).opacity(0.75)
                         }
                         .foregroundColor(.white)
                     }
                     Spacer()
                     Button(action: onClose) {
-                        Image(systemName: "xmark").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                        Image(systemName: "xmark").font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                             .frame(width: 34, height: 34).background(Circle().fill(Color.white))
                     }
                     .buttonStyle(PressableStyle())
@@ -105,7 +105,7 @@ struct NLQuickAddPanel: View {
                         ForEach(Self.visits, id: \.self) { v in
                             let on = visit == v
                             Button { visit = on ? nil : v } label: {
-                                Text(v).font(.system(size: 14, weight: .heavy))
+                                Text(v).font(.system(size: 14, weight: NT.strong))
                                     .foregroundColor(on ? NLColor.navy : NLColor.ink)
                                     .frame(width: keyW, height: 40)
                                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NLColor.yellow : NLColor.page))
@@ -157,7 +157,7 @@ struct NLQuickAddPanel: View {
 
     private func action(_ t: String, fill: Color, ink: Color, height: CGFloat, enabled: Bool, run: @escaping () -> Void) -> some View {
         Button(action: run) {
-            Text(t).font(.system(size: 17, weight: .heavy)).foregroundColor(ink)
+            Text(t).font(.system(size: 17, weight: NT.strong)).foregroundColor(ink)
                 .multilineTextAlignment(.center)
                 .frame(width: keyW, height: height)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(fill.opacity(enabled ? 1 : 0.3)))

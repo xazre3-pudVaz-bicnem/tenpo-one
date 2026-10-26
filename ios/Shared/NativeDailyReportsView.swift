@@ -395,7 +395,7 @@ struct NDRDetailSheet: View {
             VStack(alignment: .leading, spacing: 16) {
                 HStack(alignment: .top, spacing: 10) {
                     VStack(alignment: .leading, spacing: 3) {
-                        Text("\(r.storeName)　\(NWKFmt.slash(r.businessDate))").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                        Text("\(r.storeName)　\(NWKFmt.slash(r.businessDate))").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                         if let s = r.submittedAt { Text("提出: \(NWKFmt.dateTime(s))").font(.system(size: 12.5)).foregroundColor(NT.ink3) }
                         if let a = r.approvedAt { Text("承認: \(NWKFmt.dateTime(a))").font(.system(size: 12.5)).foregroundColor(NT.ink3) }
                     }

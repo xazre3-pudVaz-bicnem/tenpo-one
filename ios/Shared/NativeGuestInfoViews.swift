@@ -165,7 +165,7 @@ struct NativeSetupSheet: View {
                     .buttonStyle(PressableStyle(scale: 0.98))
                     Button { Task { await confirm() } } label: {
                         VStack(spacing: 0) {
-                            Text(saving ? (edit == nil ? "作成中…" : "保存中…") : (edit == nil ? "確定" : "保存する")).font(.system(size: 20, weight: .heavy))
+                            Text(saving ? (edit == nil ? "作成中…" : "保存中…") : (edit == nil ? "確定" : "保存する")).font(.system(size: 20, weight: NT.strong))
                             Text(edit == nil ? "Start order" : "Save").font(.system(size: 11, weight: .bold)).opacity(0.8)
                         }
                         .foregroundColor(.white)
@@ -204,7 +204,7 @@ struct NativeSetupSheet: View {
         VStack(alignment: .leading, spacing: 8) {
             heading("モード", en: "Mode")
             card {
-                row("テーブル", en: "Table") { Text(table.name).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink) }
+                row("テーブル", en: "Table") { Text(table.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.ink) }
                 rowDivider
                 row("モード", en: "Mode") {
                     valueText(planNames, on: true)
@@ -293,7 +293,7 @@ struct NativeSetupSheet: View {
                     }
                 }
             case .duration:
-                Text(nfDurationLabel(duration)).font(.system(size: 24, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(GIColor.blue)
+                Text(nfDurationLabel(duration)).font(.system(size: 24, weight: NT.strong, design: .rounded)).monospacedDigit().foregroundColor(GIColor.blue)
                     .frame(maxWidth: .infinity)
                 pickerLabel("時間 / Hours")
                 HStack(spacing: 8) {
@@ -309,7 +309,7 @@ struct NativeSetupSheet: View {
                     timeChip("カスタム / Custom", on: false) { openPad(.duration) }
                 }
             case .warning:
-                Text("\(warningMinutes)分前").font(.system(size: 24, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(GIColor.blue)
+                Text("\(warningMinutes)分前").font(.system(size: 24, weight: NT.strong, design: .rounded)).monospacedDigit().foregroundColor(GIColor.blue)
                     .frame(maxWidth: .infinity)
                 HStack(spacing: 8) {
                     ForEach([10, 15, 30], id: \.self) { mm in timeChip("\(mm)分前", on: warningMinutes == mm) { warningMinutes = mm } }
@@ -321,7 +321,7 @@ struct NativeSetupSheet: View {
             case .customer:
                 Text("電話番号で探す / Search by phone").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
                 HStack {
-                    Text(custPhone.isEmpty ? "090…" : custPhone).font(.system(size: 26, weight: .heavy, design: .rounded)).monospacedDigit()
+                    Text(custPhone.isEmpty ? "090…" : custPhone).font(.system(size: 26, weight: NT.strong, design: .rounded)).monospacedDigit()
                         .foregroundColor(custPhone.isEmpty ? NFColor.ink3 : GIColor.navy)
                     Spacer()
                     if custSearching { ProgressView() }
@@ -361,7 +361,7 @@ struct NativeSetupSheet: View {
             case .pad(let t):
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Spacer()
-                    Text(padText.isEmpty ? "0" : padText).font(.system(size: 34, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(GIColor.navy)
+                    Text(padText.isEmpty ? "0" : padText).font(.system(size: 34, weight: NT.strong, design: .rounded)).monospacedDigit().foregroundColor(GIColor.navy)
                     Text(t.unit).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink3)
                 }
                 .padding(.horizontal, 14).frame(height: 56)
@@ -418,7 +418,7 @@ struct NativeSetupSheet: View {
             }
             Button { applyPopup(pp); popup = nil } label: {
                 HStack(spacing: 6) {
-                    Text("設定").font(.system(size: 18, weight: .heavy))
+                    Text("設定").font(.system(size: 18, weight: NT.strong))
                     Text("Set").font(.system(size: 12, weight: .bold)).opacity(0.8)
                 }
                 .foregroundColor(.white)
@@ -530,7 +530,7 @@ struct NativeSetupSheet: View {
 
     private func heading(_ ja: String, en: String, required: Bool = false) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(ja).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.ink)
+            Text(ja).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.ink)
             Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
             if required { Text("＊").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.danger) }
         }
@@ -764,7 +764,7 @@ struct NativeGuestInfoSheet: View {
             } right: {
                 Button { Task { await save() } } label: {
                     VStack(spacing: 0) {
-                        Text(saving ? "保存中…" : "保存する").font(.system(size: 16, weight: .heavy))
+                        Text(saving ? "保存中…" : "保存する").font(.system(size: 16, weight: NT.strong))
                         Text("Save").font(.system(size: 10, weight: .bold)).opacity(0.8)
                     }
                     .foregroundColor(.white)
@@ -791,7 +791,7 @@ struct NativeGuestInfoSheet: View {
                                 .environment(\.timeZone, TimeZone(identifier: "Asia/Tokyo")!)
                         }
                         NFSection("終了予定 / End") {
-                            Text(endLabel).font(.system(size: 26, weight: .heavy)).monospacedDigit().foregroundColor(GIColor.navy)
+                            Text(endLabel).font(.system(size: 26, weight: NT.strong)).monospacedDigit().foregroundColor(GIColor.navy)
                         }
                     }
                     NFSection("人数 / Guests") {
@@ -883,7 +883,7 @@ struct NFCardHeader<Left: View, Right: View>: View {
     var body: some View {
         ZStack {
             VStack(spacing: 0) {
-                Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
+                Text(title).font(.system(size: 18, weight: NT.strong)).foregroundColor(NFColor.ink)
                 Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
             }
             HStack {
@@ -978,7 +978,7 @@ struct NFStepper: View {
             HStack(spacing: 8) {
                 step("−", enabled: value > min) { value = Swift.max(min, value - 1) }
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(value)").font(.system(size: 26, weight: .heavy)).monospacedDigit().foregroundColor(GIColor.navy)
+                    Text("\(value)").font(.system(size: 26, weight: NT.strong)).monospacedDigit().foregroundColor(GIColor.navy)
                     Text("名").font(.system(size: 13)).foregroundColor(NFColor.ink3)
                 }
                 .frame(width: 96, height: 48)
@@ -1069,7 +1069,7 @@ struct NFNumberPad: View {
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 4) {
                     Spacer()
-                    Text(text.isEmpty ? "0" : text).font(.system(size: 40, weight: .heavy, design: .rounded)).monospacedDigit().foregroundColor(GIColor.navy)
+                    Text(text.isEmpty ? "0" : text).font(.system(size: 40, weight: NT.strong, design: .rounded)).monospacedDigit().foregroundColor(GIColor.navy)
                     Text(unit).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink3)
                 }
                 .padding(.horizontal, 16).frame(height: 70)
@@ -1082,7 +1082,7 @@ struct NFNumberPad: View {
                 HStack(spacing: 10) {
                     key("←", fg: NFColor.ink2) { text = String(text.dropLast()) }
                     Button { onDone(Int(text) ?? 0) } label: {
-                        Text("OK").font(.system(size: 22, weight: .heavy)).foregroundColor(.white)
+                        Text("OK").font(.system(size: 22, weight: NT.strong)).foregroundColor(.white)
                             .frame(maxWidth: .infinity).frame(height: 58)
                             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(GIColor.navy))
                     }.buttonStyle(PressableStyle())

@@ -231,10 +231,13 @@ struct NPBrandTile: View {
     var height: CGFloat = 62
 
     var body: some View {
-        let c = brand.color ?? fallback
-        let ink: Color = on ? (brand.isBright ? Color(hex: 0x292725) : .white) : (brand.isBright ? Color(hex: 0x292725) : c)
+        // iPad は色を付けない（白い地に濃い字・選ぶと紫紺。2026-10-27 03:21 Ronnie「sabai ko color milau colorfull pardaina」）。iPhone は各社の色
+        let plain = AppConfig.isPad
+        let c = plain ? OV.primary : (brand.color ?? fallback)
+        let bright = plain ? false : brand.isBright
+        let ink: Color = on ? (bright ? Color(hex: 0x292725) : .white) : (plain ? OV.ink : (bright ? Color(hex: 0x292725) : c))
         VStack(spacing: 1) {
-            Text(brand.name).font(.system(size: 17, weight: .heavy)).foregroundColor(ink)
+            Text(brand.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(ink)
             if brand.english != brand.name {
                 Text(brand.english).font(.system(size: 10, weight: .semibold)).foregroundColor(ink.opacity(on ? 0.85 : 0.6))
             }
@@ -244,13 +247,13 @@ struct NPBrandTile: View {
         .frame(maxWidth: .infinity, minHeight: height)
         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? c : Color.white))
         .overlay(alignment: .bottom) {
-            if !on { Rectangle().fill(c).frame(height: 4).padding(.horizontal, 14).clipShape(Capsule()).padding(.bottom, 5) }
+            if !on && !plain { Rectangle().fill(c).frame(height: 4).padding(.horizontal, 14).clipShape(Capsule()).padding(.bottom, 5) }
         }
-        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? c : Color(hex: 0xDCE3EF), lineWidth: on ? 2 : 1))
+        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? c : (plain ? OV.line : Color(hex: 0xDCE3EF)), lineWidth: on ? 2 : 1))
         .overlay(alignment: .topTrailing) {
             if on {
                 Image(systemName: "checkmark.circle.fill").font(.system(size: 15, weight: .bold))
-                    .foregroundColor(brand.isBright ? Color(hex: 0x292725) : .white).padding(5)
+                    .foregroundColor(bright ? Color(hex: 0x292725) : .white).padding(5)
             }
         }
         .shadow(color: Color.black.opacity(on ? 0.12 : 0.05), radius: on ? 5 : 3, y: on ? 2 : 1)

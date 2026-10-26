@@ -127,7 +127,7 @@ struct NativeAccountingView: View {
                     Button { open(p, [:]) } label: {
                         HStack(spacing: 6) {
                             Image(systemName: p.icon).font(.system(size: 14, weight: .semibold))
-                            Text(p.label).font(.system(size: 15, weight: .heavy))
+                            Text(p.label).font(.system(size: 15, weight: NT.strong))
                         }
                         .foregroundColor(page == p ? .white : NT.ink)
                         .padding(.horizontal, 14).frame(height: 42)
@@ -327,7 +327,7 @@ struct NAccCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             if let title {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                     if let note { Text(note).font(.system(size: 12.5)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true) }
                 }
                 .padding(.horizontal, 16).padding(.vertical, 13)
@@ -351,7 +351,7 @@ struct NAccHeader<Trailing: View>: View {
     var body: some View {
         HStack(alignment: .center, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(title).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink)
+                Text(title).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink)
                 if let subtitle { Text(subtitle).font(.system(size: 13)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true) }
             }
             Spacer(minLength: 8)
@@ -508,7 +508,7 @@ struct NAccEmptyView: View {
     var body: some View {
         VStack(spacing: 6) {
             Image(systemName: "tray").font(.system(size: 30)).foregroundColor(NT.ink3)
-            Text(title).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink)
+            Text(title).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink)
             if let message { Text(message).font(.system(size: 13)).foregroundColor(NT.ink3).multilineTextAlignment(.center) }
         }
         .frame(maxWidth: .infinity)
@@ -547,7 +547,7 @@ struct NAccStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1)
-            Text(NT.yen(value)).font(.system(size: 21, weight: .heavy)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.6)
+            Text(NT.yen(value)).font(.system(size: 21, weight: NT.strong)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.6)
             if let note { Text(note).font(.system(size: 11)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true) }
         }
         .padding(14)

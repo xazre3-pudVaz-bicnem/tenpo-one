@@ -123,7 +123,7 @@ struct NLToolbar: View {
                 barLabel("checklist", "予約受付")
                 let n = inbox.payload?.tasks.count ?? 0
                 if n > 0 {
-                    Text(n > 99 ? "99+" : "\(n)").font(.system(size: 11, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                    Text(n > 99 ? "99+" : "\(n)").font(.system(size: 11, weight: NT.strong)).monospacedDigit().foregroundColor(.white)
                         .padding(.horizontal, 5).frame(minWidth: 20, minHeight: 20)
                         .background(Capsule().fill(NLColor.red))
                         .overlay(Capsule().stroke(NLColor.navy, lineWidth: 2))
@@ -182,7 +182,7 @@ struct NLToolbar: View {
     private func barLabel(_ icon: String, _ ja: String) -> some View {
         HStack(spacing: 6) {
             Image(systemName: icon).font(.system(size: 16, weight: .semibold))
-            Text(ja).font(.system(size: 14, weight: .heavy))
+            Text(ja).font(.system(size: 14, weight: NT.strong))
         }
         .foregroundColor(.white)
         .padding(.horizontal, 12).frame(height: 38)
@@ -249,7 +249,7 @@ struct NLFindSeatsSheet: View {
                         NFChipGrid(items: NL_STAY_OPTIONS.map { (String($0), $0 % 60 == 0 ? "\($0 / 60)時間" : "\($0 / 60)時間\($0 % 60)分", NLColor.blue, false) }, selected: [String(stay)], columns: 6, height: 42) { v in stay = Int(v) ?? 120 }
                     }
                     Button { search(time) } label: {
-                        Text(searching ? "確認中…" : "空席を確認する").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                        Text(searching ? "確認中…" : "空席を確認する").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                             .frame(maxWidth: .infinity).frame(height: 52)
                             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NLColor.blue))
                     }
@@ -259,7 +259,7 @@ struct NLFindSeatsSheet: View {
                     if let r = result {
                         VStack(alignment: .leading, spacing: 10) {
                             Text("\(dateStr) \(time)〜（\(stay)分・\(partySize)名）").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted)
-                            if let s = r.suggestion { Text("おすすめ：\(s)").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy) }
+                            if let s = r.suggestion { Text("おすすめ：\(s)").font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.navy) }
                             let free = r.free ?? []
                             if free.isEmpty {
                                 Text("この時間帯に \(partySize)名が入る空席はありません（使用中 \(r.busyCount ?? 0)卓）").font(.system(size: 14)).foregroundColor(NLColor.ink)
@@ -268,7 +268,7 @@ struct NLFindSeatsSheet: View {
                                 LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
                                     ForEach(free) { t in
                                         VStack(spacing: 2) {
-                                            Text(t.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.navy)
+                                            Text(t.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NLColor.navy)
                                             Text("\(t.capacityMin)〜\(t.capacityMax)名").font(.system(size: 11)).foregroundColor(NLColor.muted)
                                         }
                                         .frame(maxWidth: .infinity).frame(height: 56)
@@ -343,7 +343,7 @@ struct NLWalkInSheet: View {
                     if let problem { Text(problem).font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.red) }
                     Button { Task { await submit() } } label: {
                         VStack(spacing: 1) {
-                            Text(saving ? "登録中…" : "登録する").font(.system(size: 18, weight: .heavy))
+                            Text(saving ? "登録中…" : "登録する").font(.system(size: 18, weight: NT.strong))
                             Text("Register walk-in").font(.system(size: 11, weight: .bold)).opacity(0.8)
                         }
                         .foregroundColor(.white)

@@ -394,7 +394,7 @@ struct NativeShiftsView: View {
     private func weekNav(_ p: NSHPayload) -> some View {
         HStack(spacing: 8) {
             NHXIconButton(icon: "chevron.left", label: "前の週") { Task { await model.move(weeks: -1) } }
-            Text(p.rangeLabel).font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+            Text(p.rangeLabel).font(.system(size: 17, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                 .frame(minWidth: 140)
             NHXIconButton(icon: "chevron.right", label: "次の週") { Task { await model.move(weeks: 1) } }
             NHXButton(text: "今週", disabled: p.weekStart == p.todayWeekStart) { Task { await model.go(p.todayWeekStart) } }
@@ -461,7 +461,7 @@ struct NativeShiftsView: View {
 
     @ViewBuilder private func gridSection(_ p: NSHPayload) -> some View {
         HStack(spacing: 12) {
-            Text("シフト表").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+            Text("シフト表").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
             Spacer(minLength: 8)
             legend
         }
@@ -615,7 +615,7 @@ struct NativeShiftsView: View {
                 Rectangle().fill(NT.line).frame(height: 1)
                 HStack {
                     Spacer()
-                    Text("合計（判明分のみ）: \(NSHFmt.yen(p.totalCost))").font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                    Text("合計（判明分のみ）: \(NSHFmt.yen(p.totalCost))").font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                 }
                 .padding(.horizontal, 18).padding(.vertical, 12)
             }
@@ -770,7 +770,7 @@ struct NSHCellFace: View {
         let st = NSHStyle.of(first)
         return VStack(spacing: 2) {
             if let sh = first {
-                Text("\(sh.startTime)–\(sh.endTime)").font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                Text("\(sh.startTime)–\(sh.endTime)").font(.system(size: 14, weight: NT.strong)).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
                 HStack(spacing: 3) {
                     Text(sh.status == "change_requested" ? "変更申請中" : NSHFmt.kindShort(sh.kind))
@@ -1261,7 +1261,7 @@ struct NHXCard<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                     if let note { Text(note).font(.system(size: 12.5)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 8)
@@ -1356,7 +1356,7 @@ struct NHXNotice<Content: View>: View {
         HStack(alignment: .top, spacing: 10) {
             Image(systemName: icon).font(.system(size: 15, weight: .bold)).padding(.top, 1)
             VStack(alignment: .leading, spacing: 6) {
-                Text(title).font(.system(size: 14.5, weight: .heavy)).fixedSize(horizontal: false, vertical: true)
+                Text(title).font(.system(size: 14.5, weight: NT.strong)).fixedSize(horizontal: false, vertical: true)
                 content()
             }
             Spacer(minLength: 0)

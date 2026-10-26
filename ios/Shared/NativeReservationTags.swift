@@ -132,7 +132,7 @@ struct NRWStandardKeysPicker: View {
                 Button { if on { selected.removeAll { $0 == k } } else { selected.append(k) } } label: {
                     HStack(spacing: 6) {
                         if let ic = NRWKeywordIcon.symbol(for: k) { Image(systemName: ic).font(.system(size: 15, weight: .semibold)) }
-                        Text(k).font(.system(size: 14, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                        Text(k).font(.system(size: 14, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7)
                     }
                     .foregroundColor(on ? NLColor.navy : NLColor.ink)
                     .frame(maxWidth: .infinity).frame(height: height)
@@ -188,7 +188,7 @@ struct NRWTagChip: View {
             HStack(spacing: 6) {
                 if let icon { Image(systemName: NRWTagIcon.symbol(icon)).font(.system(size: 12, weight: .semibold)) }
                 Text(label).font(.system(size: 14, weight: .bold)).lineLimit(1)
-                if on { Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy)) }
+                if on { Image(systemName: "checkmark").font(.system(size: 10, weight: NT.strong)) }
             }
             .foregroundColor(on ? .white : NLColor.ink)
             .padding(.horizontal, 13).frame(height: 38)
@@ -215,10 +215,10 @@ struct NRWTagGroupsPicker: View {
                         withAnimation(.easeOut(duration: 0.15)) { if closed.contains(g.key) { closed.remove(g.key) } else { closed.insert(g.key) } }
                     } label: {
                         HStack(spacing: 8) {
-                            Text(g.label).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+                            Text(g.label).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.navy)
                             let n = g.tags.filter { selected.contains($0.label) }.count
                             if n > 0 {
-                                Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(NLColor.navy)
+                                Text("\(n)").font(.system(size: 11, weight: NT.strong)).foregroundColor(NLColor.navy)
                                     .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NLColor.yellow))
                             }
                             Spacer()
@@ -281,7 +281,7 @@ struct NRWKeywordsEditor: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(spacing: 8) {
-                Text("キーワード").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("キーワード").font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("\(keywords.count)/\(NRWLimits.keywordCount)").font(.system(size: 12, weight: .bold)).monospacedDigit().foregroundColor(full ? NLColor.red : NLColor.muted)
                 if selected != nil { Text("（いくつでも選べます）").font(.system(size: 12, weight: .semibold)).foregroundColor(NLColor.muted) }
                 Spacer()
@@ -291,7 +291,7 @@ struct NRWKeywordsEditor: View {
                         Image(systemName: editing ? "checkmark" : "pencil")
                         Text(editing ? "完了" : "編集・追加")
                     }
-                    .font(.system(size: 13, weight: .heavy)).foregroundColor(NLColor.navy)
+                    .font(.system(size: 13, weight: NT.strong)).foregroundColor(NLColor.navy)
                     .padding(.horizontal, 12).frame(height: 34)
                     .background(Capsule().fill(editing ? NLColor.yellow : NLColor.page))
                     .overlay(Capsule().stroke(editing ? NLColor.yellow : NLColor.line, lineWidth: 1))
@@ -357,7 +357,7 @@ struct NRWKeywordsEditor: View {
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
                 Button { Task { await add() } } label: {
                     HStack(spacing: 4) { Image(systemName: "plus"); Text("追加") }
-                        .font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+                        .font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.navy)
                         .padding(.horizontal, 16).frame(height: 46)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NLColor.yellow.opacity(canAdd ? 1 : 0.35)))
                 }
@@ -477,12 +477,12 @@ struct NRWLabelsSettings: View {
                 }
                 card {
                     HStack(spacing: 10) {
-                        Text("お客様・予約のタグ").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.navy)
+                        Text("お客様・予約のタグ").font(.system(size: 16, weight: NT.strong)).foregroundColor(NLColor.navy)
                         Text("区分ごと（キーワードとは別）").font(.system(size: 12, weight: .semibold)).foregroundColor(NLColor.muted)
                         Spacer()
                         Button("既定に戻す") { confirmReset = true }.font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.red)
                         Button { Task { await saveGroups() } } label: {
-                            Text(saving ? "保存中…" : "保存する").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+                            Text(saving ? "保存中…" : "保存する").font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.navy)
                                 .padding(.horizontal, 18).frame(height: 40)
                                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NLColor.yellow.opacity(dirty ? 1 : 0.4)))
                         }
@@ -496,7 +496,7 @@ struct NRWLabelsSettings: View {
                             dirty = true
                         } label: {
                             HStack(spacing: 6) { Image(systemName: "plus.circle"); Text("区分を足す") }
-                                .font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.blue)
+                                .font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.blue)
                         }
                         .buttonStyle(.plain)
                     }
@@ -525,7 +525,7 @@ struct NRWLabelsSettings: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 TextField("区分の名前", text: Binding(get: { g.wrappedValue.label }, set: { g.wrappedValue.label = String($0.prefix(15)); dirty = true }))
-                    .font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.navy)
+                    .font(.system(size: 16, weight: NT.strong)).foregroundColor(NLColor.navy)
                     .padding(.horizontal, 10).frame(height: 40).frame(maxWidth: 260)
                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(NLColor.page))
                 Text("\(g.wrappedValue.tags.count)/\(NRWLimits.tagsPerGroup)").font(.system(size: 12, weight: .bold)).monospacedDigit().foregroundColor(NLColor.muted)
@@ -578,7 +578,7 @@ struct NRWLabelsSettings: View {
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
                 Button { addTag(g) } label: {
                     HStack(spacing: 4) { Image(systemName: "plus"); Text("追加") }
-                        .font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                        .font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                         .padding(.horizontal, 14).frame(height: 42)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NLColor.yellowSoft))
                 }

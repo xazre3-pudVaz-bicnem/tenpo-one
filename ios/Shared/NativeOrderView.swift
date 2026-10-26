@@ -255,25 +255,15 @@ enum OV {
 
 // MARK: - 上のバー
 
-/// 上のバーの「ホームへ」ボタンの中身＝家の中に TENPO ONE のロゴの「1」
-/// （2026-10-24 19:22 Ronnie「ホームのボタンの中にロゴ」→ 19:24「ロゴの色が合わない・ホームに見えない」）。
-/// 黄色の箱に濃い家・「1」は黄色で抜く＝ホームの左のバーで選んだボタンと同じ色
-/// （2026-10-27 02:57 Ronnie「left top ma vayeko home button yello ma banaune ki」）
+/// 上のバーの「ホームへ」ボタン＝ホームの左のバーの「ホーム」と同じ（黄色の箱に線の家の印。ロゴは入れない）
+/// （2026-10-27 02:57 Ronnie「home button yello」→ 03:24「tenpo one ko logo pardaina、home ko menu bar ma vayeko jasto home button」）
 struct NativeHomeLogo: View {
     var body: some View {
-        ZStack {
-            NativeHouseShape().fill(OV.ink)
-                .frame(width: 30, height: 27)
-            Image("BrandOne")
-                .renderingMode(.template)
-                .resizable()
-                .scaledToFit()
-                .foregroundColor(OV.yellow)
-                .frame(height: 14)
-                .offset(y: 6)
-        }
-        .frame(width: 46, height: 40)
-        .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(OV.yellow))
+        Image(systemName: "house")
+            .font(.system(size: 21, weight: .regular))
+            .foregroundColor(OV.ink)
+            .frame(width: 46, height: 40)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(OV.yellow))
     }
 }
 
@@ -325,13 +315,14 @@ struct NativeTopBar: View {
             // 画面の名前（店名のあった場所に、同じ丸い枠で）
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                    Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                     if !subtitle.isEmpty {
-                        Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(Color(hex: 0xC9B6F5))
+                        // 画面の名前の英語はどの画面も同じ黄色（2026-10-27 03:19 Ronnie「menu ko name ko color sabailai same」）
+                        Text(subtitle).font(.system(size: 12, weight: .bold)).foregroundColor(OV.yellow)
                     }
                 }
                 .fixedSize()
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white).lineLimit(1)
+                Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(.white).lineLimit(1)
             }
             .padding(.horizontal, 14)
             .padding(.vertical, 8)
@@ -409,7 +400,7 @@ private struct SlipPanel: View {
                 .padding(.leading, -12)
                 .padding(.trailing, -6)
                 .accessibilityLabel("戻る")
-                Text(model.order.tableName).font(.system(size: 32, weight: .heavy)).foregroundColor(OV.ink)
+                Text(model.order.tableName).font(.system(size: 32, weight: NT.strong)).foregroundColor(OV.ink)
                 Button(action: onGuestInfo) {
                     HStack(spacing: 4) {
                         Image(systemName: "person.2")
@@ -498,7 +489,7 @@ private struct SlipPanel: View {
                 HStack(alignment: .lastTextBaseline) {
                     Text("合計（税込）").font(.system(size: 17, weight: .bold)).foregroundColor(NT.ink)
                     Spacer()
-                    Text(NT.yen(model.total)).font(.system(size: 34, weight: .heavy)).foregroundColor(OV.ink)
+                    Text(NT.yen(model.total)).font(.system(size: 34, weight: NT.strong)).foregroundColor(OV.ink)
                         .contentTransition(.numericText())
                         .animation(.easeOut(duration: 0.15), value: model.total)
                 }
@@ -594,7 +585,7 @@ private struct LineRow: View {
             } label: {
                 VStack(spacing: 3) {
                     Image(systemName: "trash").font(.system(size: 17, weight: .bold))
-                    Text("取消").font(.system(size: 14, weight: .heavy))
+                    Text("取消").font(.system(size: 14, weight: NT.strong))
                 }
                 .foregroundColor(.white)
                 .frame(width: max(revealW, -offset))
@@ -688,7 +679,7 @@ private struct LineRow: View {
 
     private func stepButton(_ icon: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 14, weight: .heavy)).foregroundColor(OV.ink)
+            Image(systemName: icon).font(.system(size: 14, weight: NT.strong)).foregroundColor(OV.ink)
                 .frame(width: 36, height: 34)
         }
         .buttonStyle(PressableStyle(scale: 0.9))
@@ -711,12 +702,12 @@ private struct PageTabsBar: View {
                         Button { model.openPage(pg) } label: {
                             HStack(spacing: 10) {
                                 Text(verbatim: "\(i + 1)")
-                                    .font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                                    .font(.system(size: 14, weight: NT.strong)).monospacedDigit()
                                     .foregroundColor(on ? .white : NT.ink3)
                                     .frame(width: 28, height: 28)
                                     .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(on ? Color.white.opacity(0.18) : OV.soft))
                                 VStack(alignment: .leading, spacing: 1) {
-                                    Text(pg.name).font(.system(size: 18, weight: .heavy)).lineLimit(1)
+                                    Text(pg.name).font(.system(size: 18, weight: NT.strong)).lineLimit(1)
                                     if let sub = pg.sub {
                                         Text(sub).font(.system(size: 11, weight: .semibold)).opacity(0.75).lineLimit(1)
                                     }
@@ -773,7 +764,7 @@ private struct CategoryColumn: View {
                     } label: {
                         VStack(alignment: .leading, spacing: 3) {
                             // 日本語を大きく・英語を小さく下に（2026-10-24 Ronnie）
-                            Text(cat.name).font(.system(size: 19, weight: .heavy)).lineLimit(2).minimumScaleFactor(0.8)
+                            Text(cat.name).font(.system(size: 19, weight: NT.strong)).lineLimit(2).minimumScaleFactor(0.8)
                             if let sub = cat.sub, sub != cat.name {
                                 Text(sub).font(.system(size: 12, weight: .medium)).opacity(0.75).lineLimit(1)
                             }
@@ -832,7 +823,7 @@ private struct ItemsPanel: View {
                         Button { model.customTarget = t } label: {
                             VStack(spacing: 5) {
                                 Image(systemName: "square.and.pencil").font(.system(size: 20, weight: .bold))
-                                Text("Other").font(.system(size: 17, weight: .heavy))
+                                Text("Other").font(.system(size: 17, weight: NT.strong))
                                 Text("その他・金額入力").font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3)
                             }
                             .foregroundColor(OV.primary)
@@ -871,7 +862,7 @@ private struct ItemsPanel: View {
                 if model.order.takeoutLike {
                     Button(action: onCheckout) {
                         VStack(spacing: 1) {
-                            Text("会計へ（\(NT.yen(model.total))）").font(.system(size: 20, weight: .heavy))
+                            Text("会計へ（\(NT.yen(model.total))）").font(.system(size: 20, weight: NT.strong))
                             Text("Checkout").font(.system(size: 11, weight: .bold)).opacity(0.8)
                         }
                         .lineLimit(1)
@@ -909,7 +900,7 @@ private struct ItemTile: View {
                     Text(en).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1)
                 }
                 Text(NT.yen(item.price))
-                    .font(.system(size: 19, weight: .heavy))
+                    .font(.system(size: 19, weight: NT.strong))
                     .foregroundColor(item.soldOut ? NT.ink3 : OV.ink)
                 if item.hasOptions || item.openPrice {
                     Text(item.openPrice ? "金額入力" : "オプション").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
@@ -922,7 +913,7 @@ private struct ItemTile: View {
             .overlay(alignment: .topTrailing) {
                 if qty > 0 {
                     Text("\(qty)")
-                        .font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                        .font(.system(size: 14, weight: NT.strong)).foregroundColor(.white)
                         .frame(minWidth: 26, minHeight: 26)
                         .background(Circle().fill(OV.primary))
                         .offset(x: 6, y: -6)
@@ -931,7 +922,7 @@ private struct ItemTile: View {
             .overlay {
                 if item.soldOut {
                     Text("売り切れ")
-                        .font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
+                        .font(.system(size: 13, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 10).padding(.vertical, 4)
                         .background(Capsule().fill(NT.danger))
                         .rotationEffect(.degrees(-8))
