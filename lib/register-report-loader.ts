@@ -53,36 +53,11 @@ function businessDateLabel(date: string): string {
 }
 
 /**
- * レジセッションIDからレジ精算レシートのデータを組み立てる。
- * 売上系はそのセッションの営業日の店舗全体（複数レジでも1枚で店の1日が分かる）、
- * 精算情報（釣銭準備金・実査・差額・金種）はそのセッションのもの。
- * 渡されたクライアントの権限で読む（セッション=RLS）。見つからなければ null。
+ * 店舗全体の売上の部分（売上・支払・媒体別・業務履歴…）を営業日 from〜to で組み立てる。
+ * レジ精算レシート（1 つの営業日：from＝to）と、期間の決算レポート（伝票明細の期間）の両方で使う。
+ * 渡されたクライアントの権限で読む（セッション=RLS）。
  */
-export async function loadRegisterReportData(
-  supabase: AnyClient,
-  sessionId: string,
-  /** レジで選んでいる担当者。レジは店舗共通のアカウントなので、こちらを「担当者」として印字する */
-  clerkName?: string | null
-): Promise<{ data: RegisterReportData; storeId: string; organizationId: string } | null> {
-  const SESSION_COLUMNS =
-    'id, organization_id, store_id, register_id, business_date, status, opened_at, opened_by, closed_at, closed_by, opening_float, expected_cash, counted_cash, difference, difference_reason, note, registers(name), stores(name)';
-  let sessionRes = await supabase
-    .from('register_sessions')
-    .select(`${SESSION_COLUMNS}, counted_denominations`)
-    .eq('id', sessionId)
-    .maybeSingle();
-  if (sessionRes.error && isMissingColumnError(sessionRes.error.message, 'counted_denominations')) {
-    // migration 00062 未適用（金種列が無い）。金種表なしで精算レシートを出す
-    sessionRes = await supabase.from('register_sessions').select(SESSION_COLUMNS).eq('id', sessionId).maybeSingle();
-  }
-  const session = sessionRes.data as
-    | (Record<string, unknown> & { counted_denominations?: unknown })
-    | null;
-  if (!session) return null;
-
-  const storeId = session.store_id as string;
-  const bd = session.business_date as string;
-
+async function loadStoreSalesSection(supabase: AnyClient, storeId: string, from: string, to: string) {
   const [
     { data: orders },
     { data: cancelledOrders },
@@ -90,101 +65,61 @@ export async function loadRegisterReportData(
     { data: refunds },
     { data: items },
     { data: cancelledItems },
-    { data: sessionTx },
     { data: ryoshushoJobs },
-    { data: otherOpen },
     { data: storeSettingsRow },
   ] = await Promise.all([
     supabase
       .from('orders')
-      .select('id, total, discount_total, service_charge, tax_total, guest_count, status, reservation_id, rounding_adjustment, source_order_id, opened_at, created_at, memo')
+      .select('id, total, discount_total, service_charge, tax_total, guest_count, status, reservation_id, rounding_adjustment, source_order_id, opened_at, created_at, memo, business_date')
       .eq('store_id', storeId)
-      .eq('business_date', bd)
+      .gte('business_date', from)
+      .lte('business_date', to)
       .in('status', ['paid', 'refunded'])
-      .limit(5000),
+      .limit(20000),
     supabase
       .from('orders')
       .select('id, total')
       .eq('store_id', storeId)
-      .eq('business_date', bd)
+      .gte('business_date', from)
+      .lte('business_date', to)
       .eq('status', 'cancelled')
       .limit(5000),
     supabase
       .from('payments')
       .select('method, amount, tendered')
       .eq('store_id', storeId)
-      .eq('business_date', bd)
+      .gte('business_date', from)
+      .lte('business_date', to)
       .eq('status', 'completed')
-      .limit(10000),
-    supabase.from('refunds').select('amount, kind, method').eq('store_id', storeId).eq('business_date', bd).limit(5000),
+      .limit(40000),
+    supabase.from('refunds').select('amount, kind, method').eq('store_id', storeId).gte('business_date', from).lte('business_date', to).limit(5000),
     supabase
       .from('order_items')
       .select('quantity, line_total, tax_rate, menu_items(item_type), orders!inner(status, business_date)')
       .eq('store_id', storeId)
       .eq('status', 'active')
-      .eq('orders.business_date', bd)
+      .gte('orders.business_date', from)
+      .lte('orders.business_date', to)
       .in('orders.status', ['paid', 'refunded'])
-      .limit(20000),
+      .limit(50000),
     supabase
       .from('order_items')
       .select('line_total, orders!inner(business_date)')
       .eq('store_id', storeId)
       .eq('status', 'cancelled')
-      .eq('orders.business_date', bd)
+      .gte('orders.business_date', from)
+      .lte('orders.business_date', to)
       .limit(5000),
-    supabase
-      .from('cash_transactions')
-      .select('kind, amount, purpose')
-      .eq('register_session_id', sessionId)
-      .eq('status', 'active')
-      .order('occurred_at'),
     supabase
       .from('print_jobs')
       .select('order_id, orders!inner(business_date, total)')
       .eq('store_id', storeId)
       .eq('job_type', 'ryoshusho')
-      .eq('orders.business_date', bd)
-      .limit(2000),
-    supabase
-      .from('register_sessions')
-      .select('id')
-      .eq('store_id', storeId)
-      .eq('status', 'open')
-      .neq('id', sessionId)
-      .limit(5),
+      .gte('orders.business_date', from)
+      .lte('orders.business_date', to)
+      .limit(5000),
     supabase.from('store_settings').select('settings').eq('store_id', storeId).maybeSingle(),
   ]);
-
-  // 開局の比較・締めの分け方（migration 00087。まだ列が無い DB では読めないので無しで出す）
-  const { data: dayRow } = await supabase
-    .from('register_sessions')
-    .select('next_float, deposit_amount, opening_expected, opening_difference, opening_difference_reason')
-    .eq('id', sessionId)
-    .maybeSingle();
-
-  // 担当者名
-  const profileIds = [session.opened_by, session.closed_by].filter((v): v is string => !!v);
-  const { data: profiles } = profileIds.length
-    ? await supabase.from('profiles').select('id, display_name').in('id', profileIds)
-    : { data: [] as { id: string; display_name: string }[] };
-  const nameOf = (id: string | null) =>
-    id ? ((profiles ?? []).find((p) => p.id === id)?.display_name ?? '—') : '—';
-  // 開局した担当者（migration 00090。開局の画面で選んでいた POS 担当者）。
-  // 無いとき（前からのセッション）は開いたアカウントの名前。ただしレジの共用アカウント「<店舗名>（レジ）」は人ではないので出さない
-  const { data: openClerkRow, error: openClerkError } = await supabase
-    .from('register_sessions')
-    .select('opened_clerk_name')
-    .eq('id', sessionId)
-    .maybeSingle();
-  const openedClerk = openClerkError
-    ? null
-    : ((openClerkRow as { opened_clerk_name?: string | null } | null)?.opened_clerk_name ?? null);
-  const sessionStoreName = (session.stores as unknown as { name: string } | null)?.name ?? '';
-  const openerName = (() => {
-    if (openedClerk?.trim()) return openedClerk.trim();
-    const n = nameOf(session.opened_by as string | null);
-    return n === '—' || n === `${sessionStoreName}（レジ）` ? '' : n;
-  })();
 
   // 媒体別（予約経路）。予約に紐付かない注文は「フリー」
   const reservationIds = [...new Set((orders ?? []).map((o) => o.reservation_id).filter((v): v is string => !!v))];
@@ -257,17 +192,26 @@ export async function loadRegisterReportData(
   const onAccount = (payments ?? []).filter((p) => p.method === 'on_account');
   const rounded = settled.filter((o) => Number((o as { rounding_adjustment?: number }).rounding_adjustment ?? 0) !== 0);
   const roundingAmount = rounded.reduce((a, o) => a + Math.abs(Number((o as { rounding_adjustment?: number }).rounding_adjustment ?? 0)), 0);
-  // ランチ／ディナー（区切りの時刻は 設定 > 営業時間・休業日）
-  const daypart = splitDaypart(
-    settled.map((o) => ({
-      openedAt: ((o as { opened_at?: string | null }).opened_at ?? null) as string | null,
-      createdAt: ((o as { created_at?: string | null }).created_at ?? null) as string | null,
-      total: o.total,
-      guests: o.guest_count ?? 0,
-    })),
-    bd,
-    daypartSettingsFrom(storeSettingsRow?.settings).lunchUntil
+  // ランチ／ディナー（区切りの時刻は 設定 > 営業時間・休業日）。期間のときは営業日ごとに分けて足す
+  const lunchUntil = daypartSettingsFrom(storeSettingsRow?.settings).lunchUntil;
+  const byDay = new Map<string, typeof settled>();
+  for (const o of settled) {
+    const d = String((o as { business_date?: string | null }).business_date ?? from).slice(0, 10);
+    byDay.set(d, [...(byDay.get(d) ?? []), o]);
+  }
+  const dayparts = [...byDay.entries()].map(([d, rows]) =>
+    splitDaypart(
+      rows.map((o) => ({
+        openedAt: ((o as { opened_at?: string | null }).opened_at ?? null) as string | null,
+        createdAt: ((o as { created_at?: string | null }).created_at ?? null) as string | null,
+        total: o.total,
+        guests: o.guest_count ?? 0,
+      })),
+      d,
+      lunchUntil
+    )
   );
+  const daypart = sumDayparts(dayparts, splitDaypart([], from, lunchUntil));
   const gender = settled.reduce(
     (acc, o) => {
       const g = guestGenderFromMemo((o as { memo?: string | null }).memo);
@@ -313,24 +257,6 @@ export async function loadRegisterReportData(
     ...[...channels.values()].sort((a, b) => b.sales - a.sales),
   ];
 
-  // ---- 精算情報（このセッション） ----
-  const sum = (kinds: string[]) =>
-    (sessionTx ?? []).filter((t) => kinds.includes(t.kind)).reduce((a, t) => a + t.amount, 0);
-  const cashSales = sum(['sale']);
-  const cashRefunds = sum(['refund']);
-  const cashIn = sum(['deposit', 'petty_in']);
-  const cashOut = sum(['withdrawal', 'petty_out']);
-  const openingFloat = session.opening_float as number;
-  const expected = (session.expected_cash as number | null) ?? openingFloat + cashSales - cashRefunds + cashIn - cashOut;
-  const purposeOf = (t: { purpose: string | null; kind: string }) =>
-    t.purpose?.trim() || (t.kind === 'deposit' || t.kind === 'petty_in' ? '入金' : '出金');
-  const cashIns = (sessionTx ?? [])
-    .filter((t) => t.kind === 'deposit' || t.kind === 'petty_in')
-    .map((t) => ({ purpose: purposeOf(t), amount: t.amount }));
-  const cashOuts = (sessionTx ?? [])
-    .filter((t) => t.kind === 'withdrawal' || t.kind === 'petty_out')
-    .map((t) => ({ purpose: purposeOf(t), amount: t.amount }));
-
   // ---- 業務履歴 ----
   const voids = (refunds ?? []).filter((r) => r.kind === 'void');
   const plainRefunds = (refunds ?? []).filter((r) => r.kind !== 'void');
@@ -360,21 +286,19 @@ export async function loadRegisterReportData(
     },
   ];
 
-  const notes: string[] = [];
-  if (session.difference_reason) notes.push(`差額理由: ${session.difference_reason}`);
-  if (session.note) notes.push(session.note as string);
-  if ((otherOpen ?? []).length > 0) notes.push('他のレジが開局中のため、売上情報は締め時点までの店舗全体の集計です');
+  // 日別（期間の決算レポートの表）
+  const days = [...byDay.entries()]
+    .sort(([a], [b]) => (a < b ? -1 : 1))
+    .map(([d, rows]) => ({
+      date: d,
+      groups: rows.length,
+      guests: rows.reduce((a, o) => a + (o.guest_count ?? 0), 0),
+      sales: rows.reduce((a, o) => a + o.total, 0),
+    }));
 
-  const data: RegisterReportData = {
-    storeName: (session.stores as unknown as { name: string } | null)?.name ?? '',
-    registerName: (session.registers as unknown as { name: string } | null)?.name ?? '',
-    businessDateLabel: businessDateLabel(bd),
-    sessionNo: String(session.id).slice(0, 8).toUpperCase(),
-    openedAtLabel: formatDateTime(session.opened_at as string),
-    openedBy: openerName,
-    closedAtLabel: session.closed_at ? formatDateTime(session.closed_at as string) : '—（開局中）',
-    closedBy: clerkName?.trim() || nameOf(session.closed_by as string | null),
-    printedAtLabel: jstNowLabel(),
+  return {
+    storeSettings: storeSettingsRow?.settings ?? null,
+    days,
     sales: {
       gross,
       net,
@@ -395,7 +319,7 @@ export async function loadRegisterReportData(
       guestsFemale: gender.female,
       lateNight: { count: 0, amount: 0 },
       rounding: { count: rounded.length, amount: roundingAmount },
-    },
+    } satisfies RegisterReportData['sales'],
     daypart,
     deductions: { count: (refunds ?? []).length, amount: refundTotal, tax: deductionTax, items: deductionItems },
     corrections: { label: '訂正（黒伝票）', count: corrections.length, amount: corrections.reduce((a, o) => a + o.total, 0) },
@@ -406,6 +330,150 @@ export async function loadRegisterReportData(
     surcharges: { count: settled.filter((o) => o.service_charge > 0).length, amount: serviceCharge },
     byItemType,
     byChannel,
+    tendered,
+    change,
+    receiptsCount: ryoshushoOrders.size,
+    activity,
+  };
+}
+
+/** 営業日ごとのランチ／ディナーを足す（期間の決算レポート） */
+function sumDayparts(parts: ReturnType<typeof splitDaypart>[], empty: ReturnType<typeof splitDaypart>): ReturnType<typeof splitDaypart> {
+  const out = { ...empty, lunch: { ...empty.lunch }, dinner: { ...empty.dinner } };
+  for (const p of parts) {
+    for (const k of ['lunch', 'dinner'] as const) {
+      out[k].sales += p[k].sales;
+      out[k].groups += p[k].groups;
+      out[k].guests += p[k].guests;
+    }
+  }
+  for (const k of ['lunch', 'dinner'] as const) out[k].avg = out[k].guests > 0 ? Math.round(out[k].sales / out[k].guests) : 0;
+  return out;
+}
+
+/**
+ * レジセッションIDからレジ精算レシートのデータを組み立てる。
+ * 売上系はそのセッションの営業日の店舗全体（複数レジでも1枚で店の1日が分かる）、
+ * 精算情報（釣銭準備金・実査・差額・金種）はそのセッションのもの。
+ * 渡されたクライアントの権限で読む（セッション=RLS）。見つからなければ null。
+ */
+export async function loadRegisterReportData(
+  supabase: AnyClient,
+  sessionId: string,
+  /** レジで選んでいる担当者。レジは店舗共通のアカウントなので、こちらを「担当者」として印字する */
+  clerkName?: string | null
+): Promise<{ data: RegisterReportData; storeId: string; organizationId: string } | null> {
+  const SESSION_COLUMNS =
+    'id, organization_id, store_id, register_id, business_date, status, opened_at, opened_by, closed_at, closed_by, opening_float, expected_cash, counted_cash, difference, difference_reason, note, registers(name), stores(name)';
+  let sessionRes = await supabase
+    .from('register_sessions')
+    .select(`${SESSION_COLUMNS}, counted_denominations`)
+    .eq('id', sessionId)
+    .maybeSingle();
+  if (sessionRes.error && isMissingColumnError(sessionRes.error.message, 'counted_denominations')) {
+    // migration 00062 未適用（金種列が無い）。金種表なしで精算レシートを出す
+    sessionRes = await supabase.from('register_sessions').select(SESSION_COLUMNS).eq('id', sessionId).maybeSingle();
+  }
+  const session = sessionRes.data as
+    | (Record<string, unknown> & { counted_denominations?: unknown })
+    | null;
+  if (!session) return null;
+
+  const storeId = session.store_id as string;
+  const bd = session.business_date as string;
+
+  const [sales, { data: sessionTx }, { data: otherOpen }] = await Promise.all([
+    loadStoreSalesSection(supabase, storeId, bd, bd),
+    supabase
+      .from('cash_transactions')
+      .select('kind, amount, purpose')
+      .eq('register_session_id', sessionId)
+      .eq('status', 'active')
+      .order('occurred_at'),
+    supabase
+      .from('register_sessions')
+      .select('id')
+      .eq('store_id', storeId)
+      .eq('status', 'open')
+      .neq('id', sessionId)
+      .limit(5),
+  ]);
+
+  // 開局の比較・締めの分け方（migration 00087。まだ列が無い DB では読めないので無しで出す）
+  const { data: dayRow } = await supabase
+    .from('register_sessions')
+    .select('next_float, deposit_amount, opening_expected, opening_difference, opening_difference_reason')
+    .eq('id', sessionId)
+    .maybeSingle();
+
+  // 担当者名
+  const profileIds = [session.opened_by, session.closed_by].filter((v): v is string => !!v);
+  const { data: profiles } = profileIds.length
+    ? await supabase.from('profiles').select('id, display_name').in('id', profileIds)
+    : { data: [] as { id: string; display_name: string }[] };
+  const nameOf = (id: string | null) =>
+    id ? ((profiles ?? []).find((p) => p.id === id)?.display_name ?? '—') : '—';
+  // 開局した担当者（migration 00090。開局の画面で選んでいた POS 担当者）。
+  // 無いとき（前からのセッション）は開いたアカウントの名前。ただしレジの共用アカウント「<店舗名>（レジ）」は人ではないので出さない
+  const { data: openClerkRow, error: openClerkError } = await supabase
+    .from('register_sessions')
+    .select('opened_clerk_name')
+    .eq('id', sessionId)
+    .maybeSingle();
+  const openedClerk = openClerkError
+    ? null
+    : ((openClerkRow as { opened_clerk_name?: string | null } | null)?.opened_clerk_name ?? null);
+  const sessionStoreName = (session.stores as unknown as { name: string } | null)?.name ?? '';
+  const openerName = (() => {
+    if (openedClerk?.trim()) return openedClerk.trim();
+    const n = nameOf(session.opened_by as string | null);
+    return n === '—' || n === `${sessionStoreName}（レジ）` ? '' : n;
+  })();
+
+  // ---- 精算情報（このセッション） ----
+  const sum = (kinds: string[]) =>
+    (sessionTx ?? []).filter((t) => kinds.includes(t.kind)).reduce((a, t) => a + t.amount, 0);
+  const cashSales = sum(['sale']);
+  const cashRefunds = sum(['refund']);
+  const cashIn = sum(['deposit', 'petty_in']);
+  const cashOut = sum(['withdrawal', 'petty_out']);
+  const openingFloat = session.opening_float as number;
+  const expected = (session.expected_cash as number | null) ?? openingFloat + cashSales - cashRefunds + cashIn - cashOut;
+  const purposeOf = (t: { purpose: string | null; kind: string }) =>
+    t.purpose?.trim() || (t.kind === 'deposit' || t.kind === 'petty_in' ? '入金' : '出金');
+  const cashIns = (sessionTx ?? [])
+    .filter((t) => t.kind === 'deposit' || t.kind === 'petty_in')
+    .map((t) => ({ purpose: purposeOf(t), amount: t.amount }));
+  const cashOuts = (sessionTx ?? [])
+    .filter((t) => t.kind === 'withdrawal' || t.kind === 'petty_out')
+    .map((t) => ({ purpose: purposeOf(t), amount: t.amount }));
+
+  const notes: string[] = [];
+  if (session.difference_reason) notes.push(`差額理由: ${session.difference_reason}`);
+  if (session.note) notes.push(session.note as string);
+  if ((otherOpen ?? []).length > 0) notes.push('他のレジが開局中のため、売上情報は締め時点までの店舗全体の集計です');
+
+  const data: RegisterReportData = {
+    storeName: (session.stores as unknown as { name: string } | null)?.name ?? '',
+    registerName: (session.registers as unknown as { name: string } | null)?.name ?? '',
+    businessDateLabel: businessDateLabel(bd),
+    sessionNo: String(session.id).slice(0, 8).toUpperCase(),
+    openedAtLabel: formatDateTime(session.opened_at as string),
+    openedBy: openerName,
+    closedAtLabel: session.closed_at ? formatDateTime(session.closed_at as string) : '—（開局中）',
+    closedBy: clerkName?.trim() || nameOf(session.closed_by as string | null),
+    printedAtLabel: jstNowLabel(),
+    sales: sales.sales,
+    daypart: sales.daypart,
+    deductions: sales.deductions,
+    corrections: sales.corrections,
+    uncollected: sales.uncollected,
+    payments: sales.payments,
+    refundsByMethod: sales.refundsByMethod,
+    discounts: sales.discounts,
+    surcharges: sales.surcharges,
+    byItemType: sales.byItemType,
+    byChannel: sales.byChannel,
     cash: {
       openingFloat,
       cashSales,
@@ -416,8 +484,8 @@ export async function loadRegisterReportData(
       counted: session.counted_cash as number | null,
       difference: session.difference as number | null,
       denominations: parseDenominations(session.counted_denominations),
-      tendered,
-      change,
+      tendered: sales.tendered,
+      change: sales.change,
       // 2026-09-28 Ronnie：開局は前回の翌準備金と比べる／締めは 翌準備金・預入金（銀行・預り金）・準備金不足
       openingExpected: dayRow?.opening_expected ?? null,
       openingDifference: dayRow?.opening_difference ?? null,
@@ -429,13 +497,13 @@ export async function loadRegisterReportData(
           ? 0
           : Math.max(
               0,
-              (nextFloatSettingFrom(storeSettingsRow?.settings) ?? openingFloat) - (session.counted_cash as number)
+              (nextFloatSettingFrom(sales.storeSettings) ?? openingFloat) - (session.counted_cash as number)
             ),
     },
     differenceReason: (session.difference_reason as string | null) ?? null,
-    receipts: { count: ryoshushoOrders.size },
+    receipts: { count: sales.receiptsCount },
     // レジ実績入力：現金は数えた在高（未入力なら理論値）、現金以外は記録どおり（まだ数える欄が無い）
-    countedByMethod: paymentsByMethod.map((p) =>
+    countedByMethod: sales.payments.map((p) =>
       p.label === METHOD_LABELS.cash
         ? { label: p.label, amount: (session.counted_cash as number | null) ?? expected }
         : { label: p.label, amount: p.amount }
@@ -443,11 +511,127 @@ export async function loadRegisterReportData(
     deposits: { bank: 0, safe: 0, security: 0 },
     cashIns,
     cashOuts,
-    activity,
+    activity: sales.activity,
     note: notes.length ? notes.join(' / ') : null,
   };
 
   return { data, storeId, organizationId: session.organization_id as string };
+}
+
+/** 'YYYY-MM-DD' → '10/25 (日)'（日別の表） */
+function shortDayLabel(date: string): string {
+  const [, m, d] = date.slice(0, 10).split('-');
+  return `${Number(m)}/${Number(d)} (${weekdayJa(date)})`;
+}
+
+/** 期間の見出し：1 日なら '2026/10/25 (日)'、2 日以上なら '2026/10/1 (水) 〜 10/26 (月)' */
+function periodLabel(from: string, to: string): string {
+  return from === to ? businessDateLabel(from) : `${businessDateLabel(from)} 〜 ${shortDayLabel(to)}`;
+}
+
+/**
+ * 期間の決算レポート（伝票明細の 昨日・一昨日・今週・今月・日付。2026-10-26 Ronnie）。
+ * レジ精算レシートと同じ並び（layoutRegisterReport）で、店舗全体の営業日 from〜to。入出金は期間の合計、差異は締めたレジの合計。
+ */
+export async function loadPeriodReportData(
+  supabase: AnyClient,
+  storeId: string,
+  from: string,
+  to: string,
+  clerkName?: string | null
+): Promise<{ data: RegisterReportData; storeId: string; organizationId: string } | null> {
+  const { data: store } = await supabase.from('stores').select('id, name, organization_id').eq('id', storeId).maybeSingle();
+  if (!store) return null;
+  const [sales, { data: tx }, { data: sessions }] = await Promise.all([
+    loadStoreSalesSection(supabase, storeId, from, to),
+    supabase
+      .from('cash_transactions')
+      .select('kind, amount, purpose')
+      .eq('store_id', storeId)
+      .gte('business_date', from)
+      .lte('business_date', to)
+      .eq('status', 'active')
+      .limit(20000),
+    supabase
+      .from('register_sessions')
+      .select('id, status, difference')
+      .eq('store_id', storeId)
+      .gte('business_date', from)
+      .lte('business_date', to)
+      .limit(500),
+  ]);
+  const sum = (kinds: string[]) => (tx ?? []).filter((t) => kinds.includes(t.kind)).reduce((a, t) => a + t.amount, 0);
+  const cashSales = sum(['sale']);
+  const cashRefunds = sum(['refund']);
+  const cashIn = sum(['deposit', 'petty_in']);
+  const cashOut = sum(['withdrawal', 'petty_out']);
+  // 期間は明細が長くなるので、入金・出金は用途ごとにまとめる
+  const grouped = (kinds: string[], fallback: string) => {
+    const m = new Map<string, number>();
+    for (const t of tx ?? []) {
+      if (!kinds.includes(t.kind)) continue;
+      const k = t.purpose?.trim() || fallback;
+      m.set(k, (m.get(k) ?? 0) + t.amount);
+    }
+    return [...m.entries()].map(([purpose, amount]) => ({ purpose, amount })).sort((a, b) => b.amount - a.amount);
+  };
+  const closed = (sessions ?? []).filter((s) => s.status !== 'open');
+  const unclosed = (sessions ?? []).length - closed.length;
+  const differenceTotal = closed.reduce((a, s) => a + Number(s.difference ?? 0), 0);
+  const notes: string[] = [];
+  if (unclosed > 0) notes.push(`まだ締めていないレジがあります（${unclosed}）。その日の売上は今の時点までの集計です`);
+
+  const data: RegisterReportData = {
+    storeName: (store as { name: string }).name ?? '',
+    registerName: '',
+    businessDateLabel: periodLabel(from, to),
+    sessionNo: '—',
+    openedAtLabel: '—',
+    openedBy: '',
+    closedAtLabel: '—',
+    closedBy: clerkName?.trim() || '—',
+    printedAtLabel: jstNowLabel(),
+    sales: sales.sales,
+    daypart: sales.daypart,
+    deductions: sales.deductions,
+    corrections: sales.corrections,
+    uncollected: sales.uncollected,
+    payments: sales.payments,
+    refundsByMethod: sales.refundsByMethod,
+    discounts: sales.discounts,
+    surcharges: sales.surcharges,
+    byItemType: sales.byItemType,
+    byChannel: sales.byChannel,
+    cash: {
+      openingFloat: 0,
+      cashSales,
+      cashRefunds,
+      cashIn,
+      cashOut,
+      expected: cashSales - cashRefunds + cashIn - cashOut,
+      counted: null,
+      difference: null,
+      denominations: null,
+      tendered: sales.tendered,
+      change: sales.change,
+    },
+    differenceReason: null,
+    receipts: { count: sales.receiptsCount },
+    countedByMethod: [],
+    deposits: { bank: 0, safe: 0, security: 0 },
+    cashIns: grouped(['deposit', 'petty_in'], '入金'),
+    cashOuts: grouped(['withdrawal', 'petty_out'], '出金'),
+    activity: sales.activity,
+    note: notes.length ? notes.join(' / ') : null,
+    period: {
+      label: periodLabel(from, to),
+      sessionCount: closed.length,
+      unclosedCount: unclosed,
+      differenceTotal,
+      days: sales.days.map((d) => ({ label: shortDayLabel(d.date), groups: d.groups, guests: d.guests, sales: d.sales })),
+    },
+  };
+  return { data, storeId, organizationId: (store as { organization_id: string }).organization_id };
 }
 
 export interface RegisterReportPrintResult {
@@ -472,7 +656,34 @@ export async function enqueueRegisterReportPrint(
 ): Promise<RegisterReportPrintResult> {
   const loaded = await loadRegisterReportData(supabase, sessionId, clerkName);
   if (!loaded) return { ok: false, error: '対象のレジセッションが見つかりません' };
+  return enqueueReportJob(supabase, loaded, userId, kind === 'settlement' ? 'settlement' : 'main', sessionId);
+}
 
+/**
+ * 期間の決算レポート（伝票明細の 昨日・一昨日・今週・今月・日付）をレシートプリンターへ積む（2026-10-26 Ronnie）。
+ * 出し先の選び方はレジ精算レシートと同じ（lib/register-report-printer.ts）。
+ */
+export async function enqueuePeriodReportPrint(
+  supabase: AnyClient,
+  storeId: string,
+  from: string,
+  to: string,
+  userId: string,
+  clerkName?: string | null
+): Promise<RegisterReportPrintResult> {
+  const loaded = await loadPeriodReportData(supabase, storeId, from, to, clerkName);
+  if (!loaded) return { ok: false, error: '店舗が見つかりません' };
+  return enqueueReportJob(supabase, loaded, userId, 'period', null);
+}
+
+/** レポートの紙を 1 枚、レシートプリンターのキューに積む（レジ精算・精算情報・期間の決算レポートで共通） */
+async function enqueueReportJob(
+  supabase: AnyClient,
+  loaded: { data: RegisterReportData; storeId: string; organizationId: string },
+  userId: string,
+  kind: 'main' | 'settlement' | 'period',
+  sessionId: string | null
+): Promise<RegisterReportPrintResult> {
   const printerQuery = (columns: string) =>
     supabase
       .from('printer_configs')
@@ -492,7 +703,9 @@ export async function enqueueRegisterReportPrint(
   const preferredId = await devicePrinterId();
   const rows = (receiptPrinters ?? []) as unknown as ReportPrinterRow[];
   const choice = pickRegisterReportPrinter(rows, preferredId, Date.now());
-  if (!choice) return { ok: false, error: 'レシートプリンターが未設定のため、レジ精算レシートを印刷できません' };
+  if (!choice) {
+    return { ok: false, error: `レシートプリンターが未設定のため、${kind === 'period' ? '決算レポート' : 'レジ精算レシート'}を印刷できません` };
+  }
   const printer = choice.printer;
 
   const paper = printer.paper_width_mm === 58 ? 58 : 80;
@@ -511,8 +724,8 @@ export async function enqueueRegisterReportPrint(
       body: kitchenTicketMarkup(lines),
       starprnt: kitchenTicketStarPrnt(lines).toString('base64'),
       epos: kitchenTicketEpos(eposLines),
-      kind: kind === 'settlement' ? 'register_settlement' : 'register_report',
-      register_session_id: sessionId,
+      kind: kind === 'settlement' ? 'register_settlement' : kind === 'period' ? 'period_report' : 'register_report',
+      ...(sessionId ? { register_session_id: sessionId } : {}),
     },
     status: 'queued',
     created_by: userId,
