@@ -285,7 +285,9 @@ struct NativeHomeView: View {
             .background(Capsule().fill(Color.white.opacity(0.10)))
         }
         .padding(.horizontal, 16)
-        .frame(height: 56)
+        // 上の 20pt は時計・電波の行（白い字）。その下にお知らせ・店名
+        .frame(height: 46)
+        .padding(.top, 20)
         .background(Self.sideBg)
     }
 
@@ -326,7 +328,8 @@ struct NativeHomeView: View {
                 Text("TENPO ONE").font(.system(size: 21, weight: .heavy)).foregroundColor(Self.sideActive)
                 Text("POS × RESERVE").font(.system(size: 10, weight: .semibold)).tracking(1.6).foregroundColor(Self.sideSub)
             }
-            .padding(.top, 14).padding(.bottom, 12)
+            // 上は時計・電波の行の下から
+            .padding(.top, 30).padding(.bottom, 12)
             .frame(maxWidth: .infinity)
             .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1) }
             .padding(.bottom, 6)
@@ -408,10 +411,10 @@ struct NativeHomeView: View {
         }
         byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "square.grid.2x2", label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
         if s?.canAnalytics ?? false {
-            byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.bar.xaxis", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
+            byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.bar", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
         }
         // 予算が未設定のときは右上に赤い丸の「!」（文字は書かない。2026-10-24 Ronnie）
-        byKey["#budget"] = GridTile(key: "#budget", icon: "chart.bar.xaxis", label: "予算登録", en: "Set budget", alert: s != nil && s?.budget == nil, action: { onWeb("/app/budgets/daily") })
+        byKey["#budget"] = GridTile(key: "#budget", icon: "chart.bar", label: "予算登録", en: "Set budget", alert: s != nil && s?.budget == nil, action: { onWeb("/app/budgets/daily") })
         var out = Self.gridOrder.compactMap { byKey.removeValue(forKey: $0) }
         // 見本に無い道具（在庫設定など）は後ろに、サーバーの順で
         for t in tools { if let g = byKey.removeValue(forKey: t.href) { out.append(g) } }
@@ -427,8 +430,11 @@ struct NativeHomeView: View {
     }
 
     private func tileGrid(columns: Int) -> some View {
-        LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: columns), spacing: 14) {
-            ForEach(gridTiles, id: \.key) { g in
+        let tiles = gridTiles
+        // 見本は 3 列・6 つ。在庫設定なども出る店（7 つ以上）は 4 列にして 2 段に収める
+        let cols = columns == 3 && tiles.count > 6 ? 4 : columns
+        return LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 14), count: cols), spacing: 14) {
+            ForEach(tiles, id: \.key) { g in
                 Button(action: g.action) {
                     VStack(spacing: 6) {
                         Image(systemName: g.icon).font(.system(size: 24, weight: .light)).foregroundColor(Self.tileIcon)
