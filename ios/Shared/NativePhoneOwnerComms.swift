@@ -98,7 +98,7 @@ struct NPOCSheetFrame<Content: View>: View {
                 }
                 .disabled(busy)
                 Spacer(minLength: 4)
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer(minLength: 4)
                 if let confirmText, let onConfirm {
                     Button(action: onConfirm) {
@@ -106,7 +106,7 @@ struct NPOCSheetFrame<Content: View>: View {
                             if busy { ProgressView().tint(.white) }
                             Text(confirmText)
                         }
-                        .font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                        .font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 15).frame(height: 38)
                         .background(Capsule().fill(NT.purple))
                     }
@@ -253,7 +253,7 @@ struct NPOCWideButton: View {
                 }
                 Text(text).lineLimit(1).minimumScaleFactor(0.8)
             }
-            .font(.system(size: 16, weight: .heavy))
+            .font(.system(size: 16, weight: NT.strong))
             .foregroundColor(fg)
             .frame(maxWidth: .infinity).frame(height: height)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(bg))
@@ -302,7 +302,7 @@ struct NPOCSectionTitle: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Text(title).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+            Text(title).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
             if !note.isEmpty {
                 Text(note).font(.system(size: 12)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true)
             }

@@ -261,7 +261,7 @@ struct NativeOwnerHomeView: View {
                     }
                     .disabled(!(p.stores.count > 1 || p.isHq))
                 } else {
-                    Text("TENPO ONE").font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                    Text("TENPO ONE").font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                 }
                 Spacer(minLength: 4)
                 Button { Task { await model.refresh() } } label: {
@@ -272,7 +272,7 @@ struct NativeOwnerHomeView: View {
                     ZStack(alignment: .topTrailing) {
                         Image(systemName: "bell").font(.system(size: 18, weight: .semibold)).foregroundColor(.white).frame(width: 40, height: 40)
                         if let n = p?.noticeCount, n > 0 {
-                            Text(n > 99 ? "99+" : "\(n)").font(.system(size: 10, weight: .heavy)).foregroundColor(.white)
+                            Text(n > 99 ? "99+" : "\(n)").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white)
                                 .padding(.horizontal, 5).frame(minWidth: 18, minHeight: 18)
                                 .background(Capsule().fill(Color(hex: 0xE53935)))
                                 .offset(x: 2, y: 2)
@@ -315,7 +315,7 @@ struct NativeOwnerHomeView: View {
 
     private func cardTitle(_ ja: String, en: String, link: String? = nil, href: String? = nil) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(ja).font(.system(size: 15, weight: .heavy)).foregroundColor(NOHColor.ink)
+            Text(ja).font(.system(size: 15, weight: NT.strong)).foregroundColor(NOHColor.ink)
             Text(en).font(.system(size: 11, weight: .medium)).foregroundColor(NOHColor.ink3)
             Spacer()
             if let link, let href {
@@ -336,7 +336,7 @@ struct NativeOwnerHomeView: View {
             HStack(alignment: .center, spacing: 16) {
                 VStack(alignment: .leading, spacing: 6) {
                     Text("実績売上高").font(.system(size: 12, weight: .medium)).foregroundColor(NOHColor.ink3)
-                    Text(NT.yen(s.actual)).font(.system(size: 32, weight: .heavy)).foregroundColor(NOHColor.royal).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    Text(NT.yen(s.actual)).font(.system(size: 32, weight: NT.strong)).foregroundColor(NOHColor.royal).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                     HStack(spacing: 14) {
                         VStack(alignment: .leading, spacing: 2) {
                             Text("客単価").font(.system(size: 11)).foregroundColor(NOHColor.ink3)
@@ -376,7 +376,7 @@ struct NativeOwnerHomeView: View {
             Circle().stroke(NOHColor.page, lineWidth: 10)
             Circle().trim(from: 0, to: pct).stroke(tone, style: StrokeStyle(lineWidth: 10, lineCap: .round)).rotationEffect(.degrees(-90))
             VStack(spacing: 0) {
-                Text(s.pct.map { "\($0)%" } ?? "—").font(.system(size: 20, weight: .heavy)).foregroundColor(NOHColor.ink).monospacedDigit()
+                Text(s.pct.map { "\($0)%" } ?? "—").font(.system(size: 20, weight: NT.strong)).foregroundColor(NOHColor.ink).monospacedDigit()
                 Text("達成率").font(.system(size: 9)).foregroundColor(NOHColor.ink3)
             }
         }
@@ -422,7 +422,7 @@ struct NativeOwnerHomeView: View {
                     Text(en).font(.system(size: 9)).foregroundColor(NOHColor.ink3)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text(value.map { "\($0)" } ?? "—").font(.system(size: 22, weight: .heavy)).foregroundColor(NOHColor.ink).monospacedDigit()
+                    Text(value.map { "\($0)" } ?? "—").font(.system(size: 22, weight: NT.strong)).foregroundColor(NOHColor.ink).monospacedDigit()
                     Text(unit).font(.system(size: 11)).foregroundColor(NOHColor.ink3)
                     if let d = diff {
                         Text("前日比 \(d >= 0 ? "+" : "")\(d)").font(.system(size: 9)).foregroundColor(d >= 0 ? NOHColor.success : NOHColor.iris).padding(.leading, 4)
@@ -445,14 +445,14 @@ struct NativeOwnerHomeView: View {
                     Task { if await model.switchStore(s.id) { onStoreSwitched() } }
                 } label: {
                     HStack(spacing: 10) {
-                        Text("\(i + 1)").font(.system(size: 12, weight: .heavy)).foregroundColor(i < 3 ? .white : NOHColor.ink3)
+                        Text("\(i + 1)").font(.system(size: 12, weight: NT.strong)).foregroundColor(i < 3 ? .white : NOHColor.ink3)
                             .frame(width: 22, height: 22).background(Circle().fill(i < 3 ? NOHColor.iris : NOHColor.page))
                         VStack(alignment: .leading, spacing: 1) {
                             Text(s.name).font(.system(size: 14, weight: .bold)).foregroundColor(NOHColor.ink).lineLimit(1)
                             Text("\(s.groups)組 · \(s.guests)名").font(.system(size: 11)).foregroundColor(NOHColor.ink3)
                         }
                         Spacer()
-                        Text(NT.yen(s.sales)).font(.system(size: 15, weight: .heavy)).foregroundColor(NOHColor.royal).monospacedDigit()
+                        Text(NT.yen(s.sales)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NOHColor.royal).monospacedDigit()
                         Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(NOHColor.ink3)
                     }
                     .padding(.horizontal, 16).padding(.vertical, 10)
@@ -526,7 +526,7 @@ struct NativeOwnerHomeView: View {
         VStack(alignment: .leading, spacing: 1) {
             Text(label).font(.system(size: 11, weight: .medium)).foregroundColor(NOHColor.ink3).lineLimit(1)
             HStack(alignment: .firstTextBaseline, spacing: 1) {
-                Text("\(value)").font(.system(size: 20, weight: .heavy)).foregroundColor(warn ? NOHColor.saffron : NOHColor.royal).monospacedDigit()
+                Text("\(value)").font(.system(size: 20, weight: NT.strong)).foregroundColor(warn ? NOHColor.saffron : NOHColor.royal).monospacedDigit()
                 Text(unit).font(.system(size: 10)).foregroundColor(NOHColor.ink3)
             }
         }
@@ -633,7 +633,7 @@ struct NativeOwnerHomeView: View {
             ForEach(groups) { g in
                 if let label = g.label {
                     HStack(spacing: 6) {
-                        Text(label).font(.system(size: 12, weight: .heavy)).foregroundColor(NOHColor.ink3)
+                        Text(label).font(.system(size: 12, weight: NT.strong)).foregroundColor(NOHColor.ink3)
                         if let en = g.en { Text(en).font(.system(size: 10)).foregroundColor(NOHColor.ink3.opacity(0.8)) }
                         Spacer()
                     }

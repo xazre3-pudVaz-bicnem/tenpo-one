@@ -168,7 +168,7 @@ struct NativePhoneOwnerBudgetsView: View {
                 Button { onWeb("/app/budgets/daily?month=\(model.month)") } label: {
                     VStack(spacing: 1) {
                         Image(systemName: "calendar.badge.plus").font(.system(size: 16, weight: .bold))
-                        Text("日別予算").font(.system(size: 9.5, weight: .heavy)).lineLimit(1)
+                        Text("日別予算").font(.system(size: 9.5, weight: NT.strong)).lineLimit(1)
                     }
                     .foregroundColor(.white).frame(width: 56, height: 44)
                 }
@@ -185,7 +185,7 @@ struct NativePhoneOwnerBudgetsView: View {
                                     targetCard(p)
                                     if p.booking != nil || p.landing != nil { bookingCard(p) }
                                     HStack {
-                                        Text("店舗別の予算と実績").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                                        Text("店舗別の予算と実績").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                                         Spacer()
                                         Text("経過 \(p.elapsedDays)／\(p.daysInMonth)日").font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.ink3).monospacedDigit()
                                     }
@@ -239,11 +239,11 @@ struct NativePhoneOwnerBudgetsView: View {
         return NPOCard {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "target").font(.system(size: 14, weight: .bold)).foregroundColor(NT.purple)
-                Text("\(p.monthLabel)の売上目標").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("\(p.monthLabel)の売上目標").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer(minLength: 4)
                 if t.editable {
                     Button { targetOpen = true } label: {
-                        Text(t.amount == nil ? "目標を入れる" : "変更").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.purpleDeep)
+                        Text(t.amount == nil ? "目標を入れる" : "変更").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                             .padding(.horizontal, 12).frame(height: 32)
                             .background(Capsule().fill(NT.lilac))
                     }
@@ -252,30 +252,30 @@ struct NativePhoneOwnerBudgetsView: View {
                 }
             }
             if let a = t.amount {
-                Text(NOS.yen(a)).font(.system(size: 24, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NOS.yen(a)).font(.system(size: 24, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             } else {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.circle.fill").font(.system(size: 13, weight: .bold))
-                    Text("未設定").font(.system(size: 16, weight: .heavy))
+                    Text("未設定").font(.system(size: 16, weight: NT.strong))
                 }
                 .foregroundColor(NT.danger)
             }
             HStack(alignment: .bottom) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("実績（純売上）").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NOS.yen(t.sales)).font(.system(size: 28, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                    Text(NOS.yen(t.sales)).font(.system(size: 28, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                 }
                 Spacer(minLength: 6)
                 VStack(alignment: .trailing, spacing: 1) {
                     Text("達成率").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NOS.pct(pct)).font(.system(size: 24, weight: .heavy)).foregroundColor(NOS.tone(pct)).monospacedDigit()
+                    Text(NOS.pct(pct)).font(.system(size: 24, weight: NT.strong)).foregroundColor(NOS.tone(pct)).monospacedDigit()
                 }
             }
             progress(pct, elapsed: Double(p.elapsedDays) / Double(max(1, p.daysInMonth)))
             if let f, let fv = f.forecast {
                 HStack(spacing: 6) {
                     Text("着地予測").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink2)
-                    Text(NOS.yen(fv)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NOS.yen(fv)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     if let fp = f.forecastPct { NOSBadge(text: "目標の\(String(format: "%.0f", fp))%", color: NOS.tone(fp)) }
                     Spacer()
                 }
@@ -311,15 +311,15 @@ struct NativePhoneOwnerBudgetsView: View {
                 bookingRow("席のみ", "\(NOS.int(b.seatOnly.count))件・\(NOS.int(b.seatOnly.guests))名", b.seatOnly.amount)
                 Rectangle().fill(NT.line).frame(height: 1)
                 HStack {
-                    Text("予約見込み 合計").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("予約見込み 合計").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                     Spacer()
-                    Text(NOS.yen(b.total)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                    Text(NOS.yen(b.total)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 }
                 if let l = p.landing {
                     VStack(alignment: .leading, spacing: 4) {
                         Text("実績 ＋ 予約見込み").font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.ink3)
                         HStack(spacing: 6) {
-                            Text(NOS.yen(l)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                            Text(NOS.yen(l)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                             if let a = p.target.amount, a > 0 {
                                 let pct = l / a * 100
                                 NOSBadge(text: "目標の\(String(format: "%.0f", pct))%", color: NOS.tone(pct))
@@ -341,7 +341,7 @@ struct NativePhoneOwnerBudgetsView: View {
             Text(title).font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink)
             Text(count).font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3)
             Spacer()
-            Text(NOS.yen(amount)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+            Text(NOS.yen(amount)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
         }
     }
 
@@ -352,14 +352,14 @@ struct NativePhoneOwnerBudgetsView: View {
         let cols = [GridItem(.flexible(), spacing: 8), GridItem(.flexible(), spacing: 8)]
         return NPOCard {
             HStack(spacing: 6) {
-                Text(r.storeName).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(r.storeName).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 if r.storeId == nil { NOSBadge(text: "全社", color: NT.topBar) }
                 Spacer(minLength: 4)
                 if canEdit && r.editable {
                     Button { editing = r } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "pencil").font(.system(size: 12, weight: .bold))
-                            Text("編集").font(.system(size: 13, weight: .heavy))
+                            Text("編集").font(.system(size: 13, weight: NT.strong))
                         }
                         .foregroundColor(NT.purpleDeep)
                         .padding(.horizontal, 12).frame(height: 34)
@@ -371,7 +371,7 @@ struct NativePhoneOwnerBudgetsView: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 1) {
                     Text("売上実績").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NOS.yen(r.actual.sales)).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                    Text(NOS.yen(r.actual.sales)).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
                 }
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 1) {
@@ -382,7 +382,7 @@ struct NativePhoneOwnerBudgetsView: View {
             if let f = r.forecast {
                 HStack(spacing: 6) {
                     Text("着地予測").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                    Text(NOS.yen(f)).font(.system(size: 13.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NOS.yen(f)).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     if let fp = r.forecastPct { NOSBadge(text: "\(String(format: "%.0f", fp))%", color: NOS.tone(fp)) }
                     Spacer()
                 }
@@ -404,7 +404,7 @@ struct NativePhoneOwnerBudgetsView: View {
     private func pair(_ label: String, target: String, actual: String, over: Bool) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 10.5, weight: .bold)).foregroundColor(NT.ink3)
-            Text(actual).font(.system(size: 14, weight: .heavy)).foregroundColor(over ? NT.danger : NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(actual).font(.system(size: 14, weight: NT.strong)).foregroundColor(over ? NT.danger : NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             Text("目標 \(target)").font(.system(size: 10.5, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -704,7 +704,7 @@ struct NativePhoneOwnerBudgetDailyView: View {
                 Button { leave { onWeb("/app/budgets?month=\(model.month)") } } label: {
                     VStack(spacing: 1) {
                         Image(systemName: "chart.bar.doc.horizontal").font(.system(size: 16, weight: .bold))
-                        Text("予算管理").font(.system(size: 9.5, weight: .heavy)).lineLimit(1)
+                        Text("予算管理").font(.system(size: 9.5, weight: NT.strong)).lineLimit(1)
                     }
                     .foregroundColor(.white).frame(width: 56, height: 44)
                 }
@@ -783,21 +783,21 @@ struct NativePhoneOwnerBudgetDailyView: View {
         return NPOCard {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Image(systemName: "target").font(.system(size: 14, weight: .bold)).foregroundColor(NT.purple)
-                Text("今月の売上目標").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("今月の売上目標").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
             }
             if let t = target {
-                Text(NOS.yen(t)).font(.system(size: 26, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NOS.yen(t)).font(.system(size: 26, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             } else {
                 HStack(spacing: 4) {
                     Image(systemName: "exclamationmark.circle.fill").font(.system(size: 13, weight: .bold))
-                    Text("未設定").font(.system(size: 16, weight: .heavy))
+                    Text("未設定").font(.system(size: 16, weight: NT.strong))
                 }
                 .foregroundColor(NT.danger)
             }
             HStack(spacing: 6) {
                 Text("日別の合計").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                Text(NT.yen(model.total)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NT.yen(model.total)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 if let d = diff, abs(d) >= 1 {
                     Text("目標との差 \(d > 0 ? "+" : "−")\(NOS.yen(abs(d)))").font(.system(size: 11.5, weight: .bold)).foregroundColor(d > 0 ? NT.ok : NT.danger).monospacedDigit()
                 }
@@ -825,7 +825,7 @@ struct NativePhoneOwnerBudgetDailyView: View {
             HStack(spacing: 6) {
                 Image(systemName: icon).font(.system(size: 13, weight: .bold))
                 VStack(alignment: .leading, spacing: 0) {
-                    Text(ja).font(.system(size: 13, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.8)
+                    Text(ja).font(.system(size: 13, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.8)
                     Text(en).font(.system(size: 9, weight: .semibold)).opacity(0.7).lineLimit(1)
                 }
                 Spacer(minLength: 0)
@@ -865,13 +865,13 @@ struct NativePhoneOwnerBudgetDailyView: View {
         let weather = nosWeatherSymbol(model.auto?.days?.first { $0.date == d }?.weather)
         return Button { if model.canEdit { editDay = NOSEditDay(date: d) } } label: {
             HStack(spacing: 8) {
-                Text("\(Int(d.suffix(2)) ?? 0)").font(.system(size: 16, weight: .heavy)).foregroundColor(tone).monospacedDigit().frame(width: 28, alignment: .leading)
+                Text("\(Int(d.suffix(2)) ?? 0)").font(.system(size: 16, weight: NT.strong)).foregroundColor(tone).monospacedDigit().frame(width: 28, alignment: .leading)
                 Text(NOS.weekdays[w]).font(.system(size: 13, weight: .bold)).foregroundColor(w == 0 || w == 6 ? tone : NT.ink3)
                 if isToday { NOSBadge(text: "今日", color: NT.purple) }
                 if let weather { Image(systemName: weather).font(.system(size: 13)).foregroundColor(NT.purple) }
                 Spacer(minLength: 4)
                 if changed { Circle().fill(NT.warn).frame(width: 7, height: 7) }
-                Text(v > 0 ? NT.yen(v) : "未入力").font(.system(size: 16, weight: .heavy)).foregroundColor(v > 0 ? NT.ink : NT.line).monospacedDigit()
+                Text(v > 0 ? NT.yen(v) : "未入力").font(.system(size: 16, weight: NT.strong)).foregroundColor(v > 0 ? NT.ink : NT.line).monospacedDigit()
                 if model.canEdit { Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3) }
             }
             .padding(.horizontal, 14).frame(height: 48)
@@ -888,13 +888,13 @@ struct NativePhoneOwnerBudgetDailyView: View {
         HStack(spacing: 12) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(model.dirty ? "月合計（未保存）" : "月合計").font(.system(size: 11, weight: .bold)).foregroundColor(model.dirty ? NT.warn : NT.ink3)
-                Text(NT.yen(model.total)).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+                Text(NT.yen(model.total)).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             }
             Spacer(minLength: 4)
             Button { Task { await model.save() } } label: {
                 HStack(spacing: 6) {
                     if model.busy { ProgressView().tint(.white) } else { Image(systemName: "square.and.arrow.down").font(.system(size: 15, weight: .bold)) }
-                    Text(model.busy ? "保存中…" : "保存する").font(.system(size: 16, weight: .heavy))
+                    Text(model.busy ? "保存中…" : "保存する").font(.system(size: 16, weight: NT.strong))
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 22).frame(height: 50)

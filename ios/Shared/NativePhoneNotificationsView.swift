@@ -248,7 +248,7 @@ struct NativePhoneNotificationsView: View {
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     Text(n.title)
-                        .font(.system(size: 15.5, weight: unread ? .heavy : .semibold))
+                        .font(.system(size: 15.5, weight: unread ? NT.strong : .semibold))
                         .foregroundColor(unread ? NT.ink : NT.ink2)
                         .multilineTextAlignment(.leading)
                         .fixedSize(horizontal: false, vertical: true)

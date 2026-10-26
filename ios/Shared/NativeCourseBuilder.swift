@@ -464,7 +464,7 @@ struct NativeCourseBuilderView: View {
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 10) {
                 Text(NativeCourseBuilderModel.ordinal(i + 1))
-                    .font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purple).monospacedDigit()
+                    .font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purple).monospacedDigit()
                     .frame(width: 44, alignment: .leading)
                 NSPInput(text: Binding(get: { b.stepName(row.id) }, set: { b.setStepName(row.id, $0) }), placeholder: "料理の名前（例：前菜の盛り合わせ）", width: 360)
                 stepTag(row)
@@ -543,7 +543,7 @@ struct NativeCourseBuilderView: View {
 
     private func choiceRow(_ i: Int, _ row: NCBChoiceRow, count: Int, edit: Bool) -> some View {
         HStack(spacing: 10) {
-            Text("\(i + 1)").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.ink3).frame(width: 28)
+            Text("\(i + 1)").font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.ink3).frame(width: 28)
             NSPInput(text: Binding(get: { b.choiceName(row.id) }, set: { b.setChoiceName(row.id, $0) }), placeholder: "例：牛ステーキ", enabled: edit, width: 300)
             Text("＋").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink3)
             NSPInput(text: Binding(get: { b.choicePrice(row.id) }, set: { b.setChoicePrice(row.id, $0) }), placeholder: "0", enabled: edit, width: 130, keyboard: .numberPad, trailing: "円")
@@ -654,7 +654,7 @@ struct NativeCourseBuilderView: View {
     }
 
     private func tag(_ t: String, _ c: Color) -> some View {
-        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c)
+        Text(t).font(.system(size: 11, weight: NT.strong)).foregroundColor(c)
             .padding(.horizontal, 7).padding(.vertical, 3)
             .overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }

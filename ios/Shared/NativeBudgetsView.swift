@@ -272,7 +272,7 @@ struct NativeBudgetsView: View {
                     HStack {
                         Text("予約見込み 合計").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.navy)
                         Spacer()
-                        Text(NI.yen(f.total)).font(.system(size: 19, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.royal)
+                        Text(NI.yen(f.total)).font(.system(size: 19, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.royal)
                     }
                     .padding(.horizontal, 12).padding(.vertical, 10).background(NFColor.irisSoft.opacity(0.6))
                 }

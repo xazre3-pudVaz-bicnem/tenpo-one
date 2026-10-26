@@ -181,7 +181,7 @@ struct NPACLedgerPage: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(e.description).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                         Spacer(minLength: 6)
-                        Text(NT.yen(e.debitTotal)).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NT.yen(e.debitTotal)).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                 }
                 .contentShape(Rectangle())
@@ -192,7 +192,7 @@ struct NPACLedgerPage: View {
                 ForEach(Array(e.lines.enumerated()), id: \.offset) { item in
                     let l = item.element
                     HStack(alignment: .top, spacing: 8) {
-                        Text(l.side == "debit" ? "借方" : "貸方").font(.system(size: 11, weight: .heavy))
+                        Text(l.side == "debit" ? "借方" : "貸方").font(.system(size: 11, weight: NT.strong))
                             .foregroundColor(l.side == "debit" ? NT.purpleDeep : NT.ink2)
                         VStack(alignment: .leading, spacing: 2) {
                             Text("\(l.accountCode) \(l.accountName)").font(.system(size: 13.5, weight: .semibold)).foregroundColor(NT.ink)
@@ -210,17 +210,17 @@ struct NPACLedgerPage: View {
 
     private func ledgerHead(_ b: NPACLedgerBook) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("\(b.accountCode) \(b.accountName)").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+            Text("\(b.accountCode) \(b.accountName)").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
             HStack {
                 Text("期首残高（期間の前日まで）").font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink3)
                 Spacer()
-                Text(NT.yen(b.opening)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NT.yen(b.opening)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             if let last = b.rows.last {
                 HStack {
                     Text("期末残高").font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink3)
                     Spacer()
-                    Text(NT.yen(last.balance)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                    Text(NT.yen(last.balance)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 }
             }
         }
@@ -572,7 +572,7 @@ struct NPACStatementsPage: View {
                             Text(r.code).font(.system(size: 11.5, weight: .semibold, design: .monospaced)).foregroundColor(NT.ink3)
                             Text(r.name).font(.system(size: 14.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                             Spacer(minLength: 4)
-                            Text(NT.yen(r.closing)).font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                            Text(NT.yen(r.closing)).font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         }
                         HStack(spacing: 10) {
                             Text("期首 \(NT.yen(r.opening))")
@@ -592,7 +592,7 @@ struct NPACStatementsPage: View {
                 NPACDivider()
             }
             HStack(spacing: 10) {
-                Text("小計").font(.system(size: 12.5, weight: .heavy)).foregroundColor(NT.ink2)
+                Text("小計").font(.system(size: 12.5, weight: NT.strong)).foregroundColor(NT.ink2)
                 Spacer(minLength: 4)
                 Text("期首 \(NT.yen(g.subtotal.opening))・借 \(NT.yen(g.subtotal.debit))・貸 \(NT.yen(g.subtotal.credit))")
                     .font(.system(size: 11)).foregroundColor(NT.ink3).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
@@ -615,9 +615,9 @@ struct NPACStatementsPage: View {
             .font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
             ForEach(p.compare.rows) { r in
                 HStack(spacing: 6) {
-                    Text(r.label).font(.system(size: 12.5, weight: r.emphasize ? .heavy : .regular)).foregroundColor(r.emphasize ? NT.ink : NT.ink2)
+                    Text(r.label).font(.system(size: 12.5, weight: r.emphasize ? NT.strong : .regular)).foregroundColor(r.emphasize ? NT.ink : NT.ink2)
                         .lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
-                    Text(NT.yen(r.current)).fontWeight(r.emphasize ? .heavy : .semibold).frame(width: 88, alignment: .trailing)
+                    Text(NT.yen(r.current)).fontWeight(r.emphasize ? NT.strong : .semibold).frame(width: 88, alignment: .trailing)
                     Text(NT.yen(r.prev)).frame(width: 80, alignment: .trailing).foregroundColor(NT.ink2)
                     Text(NT.yen(r.lastYear)).frame(width: 80, alignment: .trailing).foregroundColor(NT.ink2)
                 }
@@ -638,10 +638,10 @@ struct NPACStatementsPage: View {
                         .padding(.vertical, 6)
                         ForEach(m.rows) { r in
                             HStack(spacing: 8) {
-                                Text(r.label).font(.system(size: 12, weight: r.emphasize ? .heavy : .regular)).foregroundColor(r.emphasize ? NT.ink : NT.ink2)
+                                Text(r.label).font(.system(size: 12, weight: r.emphasize ? NT.strong : .regular)).foregroundColor(r.emphasize ? NT.ink : NT.ink2)
                                     .lineLimit(2).frame(width: 92, alignment: .leading)
                                 ForEach(Array(r.values.enumerated()), id: \.offset) { item in
-                                    Text(NT.yen(item.element)).font(.system(size: 12, weight: r.emphasize ? .heavy : .regular)).monospacedDigit()
+                                    Text(NT.yen(item.element)).font(.system(size: 12, weight: r.emphasize ? NT.strong : .regular)).monospacedDigit()
                                         .lineLimit(1).minimumScaleFactor(0.7).frame(width: 92, alignment: .trailing)
                                 }
                             }

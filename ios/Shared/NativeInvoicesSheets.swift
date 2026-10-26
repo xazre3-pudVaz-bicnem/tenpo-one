@@ -187,7 +187,7 @@ struct NInvDetailSheet: View {
                 HStack(spacing: 12) {
                     NPBadge(text: d.statusLabel, color: NInvText.statusColor(d.status))
                     Spacer(minLength: 8)
-                    Text(NInvText.yen(d.amount)).font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                    Text(NInvText.yen(d.amount)).font(.system(size: 28, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                     if d.canEdit {
                         NPRButton(text: "編集する", disabled: model.busy) { startEdit(d) }
                     }

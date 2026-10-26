@@ -127,7 +127,7 @@ struct NativeStockView: View {
                         }.buttonStyle(PressableStyle()).disabled(model.busy)
                         Button { Task { await save(p) } } label: {
                             HStack(spacing: 6) { Image(systemName: "square.and.arrow.down"); Text(model.busy ? "登録中…" : "登録") }
-                                .font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                                .font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                                 .padding(.horizontal, 30).frame(height: 54)
                                 .background(RoundedRectangle(cornerRadius: 14).fill(NFColor.iris))
                         }.buttonStyle(PressableStyle()).disabled(model.busy)
@@ -179,13 +179,13 @@ struct NativeStockView: View {
             Button { draft[i.id] = (s.on, min(9999, s.remaining + 1)) } label: { stepLabel("＋") }.buttonStyle(PressableStyle()).disabled(!s.on).opacity(s.on ? 1 : 0.3)
             HStack(spacing: 6) {
                 Text("残り").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink2)
-                Text(s.on ? "\(s.remaining)" : "—").font(.system(size: 20, weight: .heavy)).monospacedDigit()
+                Text(s.on ? "\(s.remaining)" : "—").font(.system(size: 20, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(s.on ? (s.remaining == 0 ? NFColor.danger : NFColor.navy) : NFColor.ink3)
                     .frame(width: 64, height: 42)
                     .background(RoundedRectangle(cornerRadius: 12).fill(s.on ? Color.white : NFColor.lilacSoft))
                     .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.line, lineWidth: 1))
             }
-            if s.on && s.remaining == 0 { Text("売切").font(.system(size: 12, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(NFColor.danger)) }
+            if s.on && s.remaining == 0 { Text("売切").font(.system(size: 12, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(NFColor.danger)) }
         }
         .padding(.horizontal, 16).frame(minHeight: 64)
         .overlay(alignment: .bottom) { Rectangle().fill(NFColor.line).frame(height: 1) }

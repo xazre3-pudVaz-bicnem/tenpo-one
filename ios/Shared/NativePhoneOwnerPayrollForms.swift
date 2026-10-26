@@ -398,7 +398,7 @@ struct NPPYCommissionSheet: View {
                     HStack {
                         Text("支給額").font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink)
                         Spacer()
-                        Text(NPPYFmt.yen(previewAmount)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                        Text(NPPYFmt.yen(previewAmount)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                     }
                     .npocRow()
                 }
@@ -660,7 +660,7 @@ struct NPPYRunCreateSheet: View {
                 .buttonStyle(PressableStyle())
                 HStack {
                     Spacer()
-                    Text("合計 \(NPPYFmt.yen(bonusTotal))").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text("合計 \(NPPYFmt.yen(bonusTotal))").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 }
                 Text("勤怠・手当・歩合は入りません。税・社会保険を引く前の総支給額を入れてください。")
                     .font(.system(size: 12)).foregroundColor(NT.ink3).padding(.horizontal, 4).fixedSize(horizontal: false, vertical: true)

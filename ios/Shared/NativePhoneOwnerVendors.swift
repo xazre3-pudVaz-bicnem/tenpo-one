@@ -231,7 +231,7 @@ struct NativePhoneVendorsView: View {
         return VStack(alignment: .leading, spacing: 7) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(v.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                    Text(v.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                     if let k = v.nameKana, !k.isEmpty { Text(k).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1) }
                 }
                 Spacer(minLength: 6)
@@ -344,11 +344,11 @@ struct NativePhoneVendorsView: View {
                         let st = NPZPoText.status(r.status)
                         Button { onOpen("/app/purchases/\(r.id)") } label: {
                             HStack(spacing: 8) {
-                                Text("#\(r.poNo)").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                                Text("#\(r.poNo)").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                                 NOSBadge(text: st.0, color: st.1)
                                 Spacer(minLength: 4)
                                 VStack(alignment: .trailing, spacing: 1) {
-                                    Text(NPZ.yen(r.total)).font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                                    Text(NPZ.yen(r.total)).font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                                     Text("入荷予定 \(NPZ.date(r.expectedAt))").font(.system(size: 10.5, weight: .semibold)).foregroundColor(NT.ink3)
                                 }
                                 Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)

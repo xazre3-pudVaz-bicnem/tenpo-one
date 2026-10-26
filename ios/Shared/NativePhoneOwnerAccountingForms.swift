@@ -109,7 +109,7 @@ struct NPACPickSheet: View {
                 }
                 Spacer(minLength: 6)
                 if selected == it.id {
-                    Image(systemName: "checkmark").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purple)
+                    Image(systemName: "checkmark").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purple)
                 }
             }
             .padding(.horizontal, 14).frame(minHeight: 48)
@@ -243,7 +243,7 @@ struct NPACEntryEditor: View {
         let account = payload.accounts.first { $0.id == b.wrappedValue.accountId }
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("\(index + 1)行目").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink2)
+                Text("\(index + 1)行目").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink2)
                 Spacer()
                 Button(role: .destructive) {
                     lines.removeAll { $0.id == id }

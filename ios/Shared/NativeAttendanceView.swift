@@ -748,7 +748,7 @@ struct NATPunchSection: View {
         } label: {
             VStack(spacing: 10) {
                 Image(systemName: Self.icon(e.value)).font(.system(size: 30, weight: .bold))
-                Text(e.label).font(.system(size: 24, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(e.label).font(.system(size: 24, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7)
             }
             .foregroundColor(filled ? Color.white : NT.ink)
             .frame(maxWidth: .infinity, minHeight: 120)
@@ -795,7 +795,7 @@ struct NATPunchSection: View {
             }
             Button(action: submitPin) {
                 Text(model.busy ? "確認中…" : "\(pinLabel)を記録する")
-                    .font(.system(size: 21, weight: .heavy)).foregroundColor(.white)
+                    .font(.system(size: 21, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity, minHeight: 64)
                     .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.purple))
             }
@@ -917,7 +917,7 @@ struct NATListSection: View {
                     Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold)).frame(width: 40, height: 44)
                 }
                 .accessibilityLabel("前の月")
-                Text(NATTime.monthLabel(currentMonth)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NATTime.monthLabel(currentMonth)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     .frame(minWidth: 110)
                 Button { go(month: NATTime.shiftMonth(currentMonth, 1)) } label: {
                     Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold)).frame(width: 40, height: 44)
@@ -981,7 +981,7 @@ struct NATRowView: View {
                 }
                 .buttonStyle(.borderless)
                 .accessibilityLabel(expanded ? "打刻履歴を閉じる" : "打刻履歴を開く")
-                Text(row.workDateLabel).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(row.workDateLabel).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 if showStaff {
                     Text(row.staffName ?? "—").font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink2).lineLimit(1)
                 }

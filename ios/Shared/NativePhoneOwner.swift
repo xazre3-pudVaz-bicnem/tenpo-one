@@ -145,7 +145,7 @@ struct NPOCard<Content: View>: View {
         return VStack(alignment: .leading, spacing: 10) {
             if !title.isEmpty {
                 HStack {
-                    Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                     Spacer()
                     if !trailing.isEmpty { Text(trailing).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3) }
                 }

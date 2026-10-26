@@ -642,7 +642,7 @@ struct NPPYListView: View {
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
                 }
-                Text(r.title).font(.system(size: 16.5, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
+                Text(r.title).font(.system(size: 16.5, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                 Text(r.periodLabel).font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink2).lineLimit(1)
                 HStack(spacing: 12) {
                     meta("storefront", "対象 \(r.storeName)")
@@ -694,7 +694,7 @@ struct NPPYListView: View {
             Spacer(minLength: 8)
             Button(action: add) {
                 HStack(spacing: 4) {
-                    Image(systemName: "plus").font(.system(size: 12, weight: .heavy))
+                    Image(systemName: "plus").font(.system(size: 12, weight: NT.strong))
                     Text("追加").font(.system(size: 13.5, weight: .bold))
                 }
                 .foregroundColor(NT.purpleDeep)
@@ -715,7 +715,7 @@ struct NPPYListView: View {
                     .lineLimit(2).multilineTextAlignment(.leading)
             }
             Spacer(minLength: 6)
-            Text(NPPYFmt.yen(r.baseAmount)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+            Text(NPPYFmt.yen(r.baseAmount)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
@@ -731,7 +731,7 @@ struct NPPYListView: View {
                 Text("適用 \(r.effectiveFromLabel)〜").font(.system(size: 11.5)).foregroundColor(NT.ink3)
             }
             Spacer(minLength: 6)
-            Text(NPPYFmt.commissionValue(r)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+            Text(NPPYFmt.commissionValue(r)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
         }
         .padding(.horizontal, 14).padding(.vertical, 12)
@@ -759,7 +759,7 @@ struct NPPYListView: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 6) {
                     Text("最新の明細").font(.system(size: 12, weight: .bold)).foregroundColor(.white.opacity(0.75))
-                    Text(NPPYFmt.runType[r.runType] ?? r.runType).font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                    Text(NPPYFmt.runType[r.runType] ?? r.runType).font(.system(size: 11, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 7).padding(.vertical, 2)
                         .background(Capsule().fill(Color.white.opacity(0.18)))
                     Spacer(minLength: 4)
@@ -767,12 +767,12 @@ struct NPPYListView: View {
                     Image(systemName: "chevron.right").font(.system(size: 11, weight: .bold)).foregroundColor(.white.opacity(0.9))
                 }
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(r.title).font(.system(size: 18, weight: .heavy)).foregroundColor(.white).lineLimit(1)
+                    Text(r.title).font(.system(size: 18, weight: NT.strong)).foregroundColor(.white).lineLimit(1)
                     Text(r.periodLabel).font(.system(size: 12)).foregroundColor(.white.opacity(0.7)).lineLimit(1)
                 }
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
                     Text(r.runType == "bonus" ? "賞与支給額" : "総支給").font(.system(size: 12, weight: .bold)).foregroundColor(.white.opacity(0.75))
-                    Text(NPPYFmt.yen(r.grossTotal)).font(.system(size: 32, weight: .heavy)).foregroundColor(.white).monospacedDigit()
+                    Text(NPPYFmt.yen(r.grossTotal)).font(.system(size: 32, weight: NT.strong)).foregroundColor(.white).monospacedDigit()
                         .lineLimit(1).minimumScaleFactor(0.6)
                 }
                 if let l = model.latest {
@@ -801,7 +801,7 @@ struct NPPYListView: View {
     private func heroStat(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(.white.opacity(0.65))
-            Text(value).font(.system(size: 16, weight: .heavy)).foregroundColor(.white).monospacedDigit()
+            Text(value).font(.system(size: 16, weight: NT.strong)).foregroundColor(.white).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -826,7 +826,7 @@ struct NPPYListView: View {
                     Text(r.periodLabel).font(.system(size: 12)).foregroundColor(NT.ink3).lineLimit(1)
                 }
                 Spacer(minLength: 6)
-                Text(NPPYFmt.yen(r.grossTotal)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NPPYFmt.yen(r.grossTotal)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.7)
                 Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
             }
@@ -847,7 +847,7 @@ struct NPPYListView: View {
                     .frame(width: 42, height: 42)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.lilac))
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("年末調整").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("年末調整").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                     Text(isManager ? "自分の申告・提出状況の確認" : "扶養家族・保険料の申告（下書き・提出）")
                         .font(.system(size: 12.5)).foregroundColor(NT.ink3).lineLimit(1)
                 }

@@ -239,7 +239,7 @@ struct NPIVDetailView: View {
     private func header(_ d: NPIVDetail) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(d.vendorName).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                Text(d.vendorName).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                 Spacer(minLength: 6)
                 NOSBadge(text: d.statusLabel, color: NPIVText.statusColor(d.status))
             }
@@ -247,7 +247,7 @@ struct NPIVDetailView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("金額").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                 Spacer()
-                Text(NPIVText.yen(d.amount)).font(.system(size: 30, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NPIVText.yen(d.amount)).font(.system(size: 30, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             }
             NPZInfoRow(label: "税額", value: NPIVText.yen(d.taxAmount))
             NPZInfoRow(label: "支払期限", value: d.dueLabel)
@@ -400,8 +400,8 @@ struct NPIVPaySheet: View {
         NPOCSheetFrame(title: "支払済みにする", confirmText: busy ? "記録中…" : "支払済みにする", busy: busy, onCancel: onClose, onConfirm: { onPay(NOS.str(paidAt)) }) {
             if let error { NPACProblem(text: error) }
             VStack(alignment: .leading, spacing: 6) {
-                Text(detail.vendorName).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
-                Text(NPIVText.yen(detail.amount)).font(.system(size: 28, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(detail.vendorName).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
+                Text(NPIVText.yen(detail.amount)).font(.system(size: 28, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 Text("支払期限 \(detail.dueLabel)").font(.system(size: 12.5)).foregroundColor(NT.ink3)
             }
             .padding(14)
@@ -577,7 +577,7 @@ struct NPIVAttachBox: View {
                 PhotosPicker(selection: $photoItems, maxSelectionCount: 1, matching: .images) {
                     HStack(spacing: 6) {
                         Image(systemName: "photo.on.rectangle").font(.system(size: 15, weight: .bold))
-                        Text("写真").font(.system(size: 15.5, weight: .heavy))
+                        Text("写真").font(.system(size: 15.5, weight: NT.strong))
                     }
                     .foregroundColor(NT.purpleDeep)
                     .frame(maxWidth: .infinity).frame(height: 46)

@@ -119,18 +119,18 @@ struct NativeOfflineBanner: View {
                     Text(store.hasProblems ? "送れなかったオフラインの伝票があります（設定 > プリンター・印刷 > ネットが無いときの印刷）"
                          : !store.notes.isEmpty ? "オフラインの伝票を送りました。確かめてほしいことがあります（設定 > プリンター・印刷 > ネットが無いときの印刷）"
                          : "オフラインの伝票 \(store.pendingCount)件をサーバーへ送っています…")
-                        .font(.system(size: 14, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                        .font(.system(size: 14, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7)
                 }
                 .foregroundColor(.white)
                 .padding(.horizontal, 16).padding(.vertical, 8)
-                .background(Capsule().fill(problem ? Color(hex: 0xB7791F) : Color(hex: 0x1A5AD6)))
+                .background(Capsule().fill(problem ? Color(hex: 0xB7791F) : Color(hex: 0x37324D)))
                 .shadow(color: .black.opacity(0.2), radius: 8, y: 3)
                 .padding(.top, 6)
                 .allowsHitTesting(false)
             } else if !net.online {
                 HStack(spacing: 8) {
                     Image(systemName: "wifi.slash").font(.system(size: 14, weight: .bold))
-                    Text("オフライン（ネット無し）").font(.system(size: 14, weight: .heavy))
+                    Text("オフライン（ネット無し）").font(.system(size: 14, weight: NT.strong))
                     Text(store.pendingCount > 0 ? "この iPad に \(store.pendingCount)件 保存中。ネットが戻ると自動で送ります" : "注文・現金会計・印刷はこの iPad でできます。ネットが戻ると自動で送ります")
                         .font(.system(size: 12, weight: .semibold)).opacity(0.9)
                         .lineLimit(1).minimumScaleFactor(0.7)

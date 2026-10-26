@@ -231,7 +231,7 @@ struct NAccAutoSourceCard: View {
                 HStack(alignment: .center, spacing: 12) {
                     VStack(alignment: .leading, spacing: 4) {
                         HStack(spacing: 8) {
-                            Text(source.title).font(.system(size: 16.5, weight: .heavy)).foregroundColor(NT.ink)
+                            Text(source.title).font(.system(size: 16.5, weight: NT.strong)).foregroundColor(NT.ink)
                             if source.negative { NPBadge(text: "マイナス計上", color: NT.warn) }
                         }
                         Text(source.hint).font(.system(size: 12)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true)

@@ -289,7 +289,7 @@ struct NativeCashView: View {
                         HStack {
                             Text(ncDenomLabel(d)).font(.system(size: 15, weight: .semibold)).foregroundColor(NFColor.ink).frame(maxWidth: .infinity, alignment: .leading)
                             HStack(spacing: 2) {
-                                Text(counts[d].map(String.init) ?? "0").font(.system(size: 18, weight: .heavy)).monospacedDigit()
+                                Text(counts[d].map(String.init) ?? "0").font(.system(size: 18, weight: NT.strong)).monospacedDigit()
                                     .foregroundColor(counts[d] == nil ? NFColor.ink3 : NFColor.ink)
                                 Text("枚").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                             }
@@ -308,7 +308,7 @@ struct NativeCashView: View {
                 HStack {
                     Text("合計（実査額）").font(.system(size: 15, weight: .semibold)).foregroundColor(NFColor.ink)
                     Spacer()
-                    Text(NT.yen(total)).font(.system(size: 26, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                    Text(NT.yen(total)).font(.system(size: 26, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.ink)
                 }
                 .padding(.horizontal, 12).frame(height: 52)
                 .background(NFColor.lilacSoft)
@@ -339,7 +339,7 @@ struct NativeCashView: View {
                 if counts[f] == nil { counts[f] = 0 }
                 focus = i + 1 < NC_DENOMS.count ? NC_DENOMS[i + 1] : nil
             } label: {
-                Text("次へ / Next").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                Text("次へ / Next").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NFColor.iris))
             }
@@ -397,7 +397,7 @@ struct NativeCashView: View {
                             Text("過不足").foregroundColor(NFColor.ink2)
                             Spacer()
                             Text(!entered || diff == nil ? "—" : diff == 0 ? "±¥0（合っています）" : "\(diff! > 0 ? "+" : "−")\(NT.yen(abs(diff!)))")
-                                .font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                                .font(.system(size: 15, weight: NT.strong)).monospacedDigit()
                                 .foregroundColor(!entered ? NFColor.ink3 : diff == 0 ? NFColor.success : NFColor.danger)
                         }
                     }
@@ -443,7 +443,7 @@ struct NativeCashView: View {
                 if p.canOperate {
                     Button { Task { await doClose(p, s) } } label: {
                         VStack(spacing: 0) {
-                            Text(model.busy ? "クローズ中…" : "レジクローズする").font(.system(size: 14, weight: .heavy))
+                            Text(model.busy ? "クローズ中…" : "レジクローズする").font(.system(size: 14, weight: NT.strong))
                             Text("Close register").font(.system(size: 9, weight: .bold)).opacity(0.8)
                         }
                         .foregroundColor(.white).padding(.horizontal, 14).frame(height: 40)
@@ -459,13 +459,13 @@ struct NativeCashView: View {
                     .padding(10).background(RoundedRectangle(cornerRadius: 8).fill(Color(hex: 0xFFFBEB)))
             }
             row("レジオープン金額", en: "Opening cash") {
-                HStack(spacing: 6) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(NFColor.ink3); Text(NT.yen(s.openingFloat)).font(.system(size: 16, weight: .heavy)).monospacedDigit() }
+                HStack(spacing: 6) { Image(systemName: "lock.fill").font(.system(size: 11)).foregroundColor(NFColor.ink3); Text(NT.yen(s.openingFloat)).font(.system(size: 16, weight: NT.strong)).monospacedDigit() }
             }
             VStack(alignment: .leading, spacing: 2) {
                 HStack {
                     Text("理論在高").font(.system(size: 14, weight: .medium))
                     Spacer()
-                    Text(NT.yen(s.theoreticalCash)).font(.system(size: 18, weight: .heavy)).monospacedDigit()
+                    Text(NT.yen(s.theoreticalCash)).font(.system(size: 18, weight: NT.strong)).monospacedDigit()
                 }
                 Text("釣銭準備金 ＋ 現金売上 ＋ 入金 − 出金 − 現金返金").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                 Text("\(NT.yen(s.openingFloat)) ＋ \(NT.yen(s.cashSales)) ＋ \(NT.yen(s.cashIn)) − \(NT.yen(s.cashOut))\(s.cashRefunds > 0 ? " − \(NT.yen(s.cashRefunds))" : "")")
@@ -475,7 +475,7 @@ struct NativeCashView: View {
             counter(columns: 2)
             row("差額", en: "") {
                 Text(diff == nil ? "—" : "\(diff! > 0 ? "+" : diff! < 0 ? "−" : "±")\(NT.yen(abs(diff!)))")
-                    .font(.system(size: 18, weight: .heavy)).monospacedDigit()
+                    .font(.system(size: 18, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(diff == nil ? NFColor.ink : diff == 0 ? NFColor.success : NFColor.danger)
             }
             VStack(spacing: 4) {
@@ -609,7 +609,7 @@ struct NativeCashView: View {
                     Text("合計").font(.system(size: 14, weight: .bold))
                     Spacer()
                     Text("\(p.paymentsCount)件").font(.system(size: 12)).foregroundColor(NFColor.ink3).frame(width: 50, alignment: .trailing)
-                    Text(NT.yen(p.paymentsTotal)).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(Color(hex: 0xC27C0E)).frame(width: 110, alignment: .trailing)
+                    Text(NT.yen(p.paymentsTotal)).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(Color(hex: 0xC27C0E)).frame(width: 110, alignment: .trailing)
                 }
                 .padding(.vertical, 8).padding(.horizontal, 8)
                 .background(NFColor.lilacSoft)
@@ -630,7 +630,7 @@ struct NativeCashView: View {
                 HStack {
                     Text("現金残り").font(.system(size: 14, weight: .bold)); Text("Cash in drawer").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                     Spacer()
-                    Text(NT.yen(c.remaining)).font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.royal)
+                    Text(NT.yen(c.remaining)).font(.system(size: 17, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.royal)
                 }
                 .padding(.vertical, 8).padding(.horizontal, 8).background(NFColor.lilacSoft)
             }
@@ -683,7 +683,7 @@ struct NativeCashView: View {
         card {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(c.registerName).font(.system(size: 16, weight: .heavy))
+                    Text(c.registerName).font(.system(size: 16, weight: NT.strong))
                     Text("開局 \(ncTime(c.openedAt))｜担当 \(c.openedByName)\(c.closedAt.map { "｜締め \(ncTime($0))｜締め担当 \(c.closedByName)" } ?? "")")
                         .font(.system(size: 11)).foregroundColor(NFColor.ink3)
                 }
@@ -727,7 +727,7 @@ struct NativeCashView: View {
                     Image(systemName: "exclamationmark.triangle.fill")
                     VStack(alignment: .leading, spacing: 3) {
                         Text(late.map { "\(ncMd($0.businessDate)) \($0.registerName)" }.joined(separator: "・") + " がまだレジ精算されていません")
-                            .font(.system(size: 14, weight: .heavy))
+                            .font(.system(size: 14, weight: NT.strong))
                         Text("このレジを締めるまで、同じレジは新しく開局できません。上の「レジクローズ」で現金を数えて締めてください（締めると精算レシートが出ます）。")
                             .font(.system(size: 12))
                     }
@@ -752,7 +752,7 @@ struct NativeCashView: View {
         let color = r.isOpen ? (lateOpen ? NFColor.danger : Color(hex: 0xC27C0E)) : NFColor.ink2
         return VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 8) {
-                Text(ncMd(r.businessDate)).font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                Text(ncMd(r.businessDate)).font(.system(size: 15, weight: NT.strong)).monospacedDigit()
                 Text(r.registerName).font(.system(size: 15, weight: .bold))
                 badge(status, color: color)
                 Spacer(minLength: 0)
@@ -800,7 +800,7 @@ struct NativeCashView: View {
 
     private func cardTitle(_ ja: String, en: String) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(ja).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text(ja).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
             if !en.isEmpty { Text(en).font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3) }
         }
     }
@@ -839,7 +839,7 @@ struct NativeCashView: View {
     private func tile(_ label: String, _ value: String, sub: String?, danger: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 11)).foregroundColor(NFColor.ink3).lineLimit(1).minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(danger ? NFColor.danger : NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.system(size: 17, weight: NT.strong)).monospacedDigit().foregroundColor(danger ? NFColor.danger : NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
             if let sub { Text(sub).font(.system(size: 11)).foregroundColor(NFColor.ink3).lineLimit(1) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -881,7 +881,7 @@ struct NativeCashView: View {
     private func bigAction(_ ja: String, en: String? = nil, fill: Color, enabled: Bool, dim: Bool = false, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 0) {
-                Text(ja).font(.system(size: 18, weight: .heavy))
+                Text(ja).font(.system(size: 18, weight: NT.strong))
                 if let en { Text(en).font(.system(size: 11, weight: .bold)).opacity(0.8) }
             }
             .foregroundColor(.white)

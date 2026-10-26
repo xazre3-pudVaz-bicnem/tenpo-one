@@ -58,14 +58,14 @@ struct NPZTransfersList: View {
             } label: {
                 VStack(alignment: .leading, spacing: 7) {
                     HStack(spacing: 8) {
-                        Text("#\(r.transferNo)").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                        Text("#\(r.transferNo)").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                         NOSBadge(text: st.0, color: st.1)
                         Spacer(minLength: 4)
                         Text(NPZ.dateTime(r.createdAt)).font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit()
                     }
                     HStack(spacing: 6) {
                         Text(r.fromStoreName).font(.system(size: 14.5, weight: .bold)).foregroundColor(isFrom ? NT.purpleDeep : NT.ink).lineLimit(1)
-                        Image(systemName: "arrow.right").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink3)
+                        Image(systemName: "arrow.right").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink3)
                         Text(r.toStoreName).font(.system(size: 14.5, weight: .bold)).foregroundColor(isTo ? NT.purpleDeep : NT.ink).lineLimit(1)
                         Spacer(minLength: 4)
                         Text("\(r.items.count)品目").font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink2)
@@ -170,12 +170,12 @@ struct NPZReorderList: View {
                 .padding(.top, 1)
             VStack(alignment: .leading, spacing: 5) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
-                    Text(r.name).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
+                    Text(r.name).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                     if r.needed { NOSBadge(text: "要発注", color: NT.warn) }
                     Spacer(minLength: 4)
                     VStack(alignment: .trailing, spacing: 0) {
                         Text("推奨").font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3)
-                        Text(NPZ.q(r.suggestedQuantity) + r.unit).font(.system(size: 18, weight: .heavy)).foregroundColor(r.suggestedQuantity > 0 ? NT.purpleDeep : NT.ink3).monospacedDigit()
+                        Text(NPZ.q(r.suggestedQuantity) + r.unit).font(.system(size: 18, weight: NT.strong)).foregroundColor(r.suggestedQuantity > 0 ? NT.purpleDeep : NT.ink3).monospacedDigit()
                     }
                 }
                 HStack(spacing: 10) {
@@ -229,11 +229,11 @@ struct NPZForecastView: View {
                     ForEach(Array((f?.top ?? []).enumerated()), id: \.offset) { i, t in
                         Button { select(t.id) } label: {
                             HStack(spacing: 10) {
-                                Text("\(i + 1)").font(.system(size: 11, weight: .heavy)).foregroundColor(i < 3 ? .white : NT.ink3)
+                                Text("\(i + 1)").font(.system(size: 11, weight: NT.strong)).foregroundColor(i < 3 ? .white : NT.ink3)
                                     .frame(width: 22, height: 22).background(Circle().fill(i < 3 ? NT.purple : NT.page))
                                 Text(t.name).font(.system(size: 14.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                                 Spacer()
-                                Text(NPZ.q(t.tomorrow) + t.unit).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                                Text(NPZ.q(t.tomorrow) + t.unit).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                             }
                             .padding(.horizontal, 14).frame(minHeight: 48)
                             .contentShape(Rectangle())

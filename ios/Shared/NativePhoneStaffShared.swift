@@ -91,8 +91,8 @@ struct NPWBarButtonView: View {
     var body: some View {
         Button(action: button.action) {
             VStack(spacing: 1) {
-                Image(systemName: button.icon).font(.system(size: 17, weight: .heavy))
-                Text(button.label).font(.system(size: 9.5, weight: .heavy)).lineLimit(1)
+                Image(systemName: button.icon).font(.system(size: 17, weight: NT.strong))
+                Text(button.label).font(.system(size: 9.5, weight: NT.strong)).lineLimit(1)
             }
             .foregroundColor(.white)
             .frame(minWidth: 48, minHeight: 44)
@@ -115,7 +115,7 @@ struct NPWErrorView: View {
             Text(message).font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink2)
                 .multilineTextAlignment(.center).padding(.horizontal, 28)
             Button { Task { await retry() } } label: {
-                Text("もう一度読む").font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                Text("もう一度読む").font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                     .padding(.horizontal, 24).frame(height: 46)
                     .background(Capsule().fill(NT.purple))
             }
@@ -174,9 +174,9 @@ struct NPWTabBar: View {
                 Button { pick(t.key) } label: {
                     VStack(spacing: 0) {
                         HStack(spacing: 5) {
-                            Text(t.label).font(.system(size: 14.5, weight: .heavy)).foregroundColor(on ? NT.ink : NT.ink3).lineLimit(1)
+                            Text(t.label).font(.system(size: 14.5, weight: NT.strong)).foregroundColor(on ? NT.ink : NT.ink3).lineLimit(1)
                             if t.count > 0 {
-                                Text(t.count > 99 ? "99+" : "\(t.count)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                                Text(t.count > 99 ? "99+" : "\(t.count)").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white)
                                     .padding(.horizontal, 5).frame(minWidth: 19, minHeight: 19)
                                     .background(Capsule().fill(NT.danger))
                             }
@@ -212,16 +212,16 @@ struct NPWPeriodBar: View {
             HStack(spacing: 6) {
                 if let r = resetLabel {
                     Button(action: onReset) {
-                        Text(r).font(.system(size: 13, weight: .heavy)).foregroundColor(NT.purple)
+                        Text(r).font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.purple)
                             .padding(.horizontal, 10).frame(height: 32)
                             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
                     }
                     .buttonStyle(PressableStyle())
                 }
                 VStack(spacing: 0) {
-                    Text(label).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
+                    Text(label).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
                         .minimumScaleFactor(0.8)
-                    if !sub.isEmpty { Text(sub).font(.system(size: 10.5, weight: .heavy)).foregroundColor(NT.purple).lineLimit(1) }
+                    if !sub.isEmpty { Text(sub).font(.system(size: 10.5, weight: NT.strong)).foregroundColor(NT.purple).lineLimit(1) }
                 }
                 .frame(maxWidth: .infinity)
                 if loading { ProgressView().scaleEffect(0.8).tint(NT.purple) }
@@ -236,7 +236,7 @@ struct NPWPeriodBar: View {
 
     private func arrow(_ icon: String, _ label: String, _ action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink2)
+            Image(systemName: icon).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink2)
                 .frame(width: 46, height: 44)
                 .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white))
                 .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -269,7 +269,7 @@ struct NPWButton: View {
                 }
                 Text(text).lineLimit(1).minimumScaleFactor(0.8)
             }
-            .font(.system(size: 15, weight: .heavy))
+            .font(.system(size: 15, weight: NT.strong))
             .foregroundColor(kind == .secondary ? NT.ink : Color.white)
             .padding(.horizontal, 14)
             .frame(maxWidth: wide ? .infinity : nil)
@@ -302,7 +302,7 @@ struct NPWStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 24, weight: .heavy)).monospacedDigit().foregroundColor(color).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 24, weight: NT.strong)).monospacedDigit().foregroundColor(color).lineLimit(1).minimumScaleFactor(0.6)
             if let sub { Text(sub).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1) }
         }
         .padding(12).frame(maxWidth: .infinity, alignment: .leading)
@@ -335,7 +335,7 @@ struct NPWSectionTitle<Trailing: View>: View {
 
     var body: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
-            Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+            Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
             if !count.isEmpty { Text(count).font(.system(size: 12.5, weight: .bold)).foregroundColor(NT.ink3).monospacedDigit() }
             Spacer(minLength: 6)
             trailing()
@@ -361,7 +361,7 @@ struct NPWInfoRow: View {
             Text(label).font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink3)
                 .frame(width: 104, alignment: .leading)
             Text(value.isEmpty ? "—" : value)
-                .font(.system(size: 15, weight: strong ? Font.Weight.heavy : Font.Weight.medium))
+                .font(.system(size: 15, weight: strong ? NT.strong : Font.Weight.medium))
                 .foregroundColor(value.isEmpty ? NT.ink3 : NT.ink)
                 .fixedSize(horizontal: false, vertical: true)
                 .frame(maxWidth: .infinity, alignment: .leading)
@@ -384,7 +384,7 @@ struct NPWAvatar: View {
 
     var body: some View {
         Text(String(name.trimmingCharacters(in: .whitespaces).prefix(1)))
-            .font(.system(size: size * 0.42, weight: .heavy)).foregroundColor(color)
+            .font(.system(size: size * 0.42, weight: NT.strong)).foregroundColor(color)
             .frame(width: size, height: size)
             .background(Circle().fill(color.opacity(0.12)))
     }

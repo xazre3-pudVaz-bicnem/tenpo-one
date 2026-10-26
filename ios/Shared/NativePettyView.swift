@@ -75,7 +75,7 @@ private func npCard<C: View>(@ViewBuilder _ c: () -> C) -> some View {
 private func npStat(_ label: String, _ value: String, tone: Color = NFColor.navy, sub: String? = nil, @ViewBuilder extra: () -> some View = { EmptyView() }) -> some View {
     VStack(alignment: .leading, spacing: 4) {
         Text(label).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
-        Text(value).font(.system(size: 24, weight: .heavy)).monospacedDigit().foregroundColor(tone)
+        Text(value).font(.system(size: 24, weight: NT.strong)).monospacedDigit().foregroundColor(tone)
         if let sub { Text(sub).font(.system(size: 11)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true) }
         extra()
     }
@@ -118,7 +118,7 @@ struct NPReasonSheet: View {
     @State private var busy = false
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
-            Text(prompt.title).font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text(prompt.title).font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
             Text(prompt.message).font(.system(size: 14)).foregroundColor(NFColor.ink2).fixedSize(horizontal: false, vertical: true)
             Text("理由").font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink2)
             TextField("理由を入力", text: $reason, axis: .vertical).lineLimit(3...6)
@@ -145,7 +145,7 @@ struct NPAmountPad: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text(label).font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink2)
-            Text(value.isEmpty ? "0円" : "\(NT.yen(Int(value) ?? 0))").font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy)
+            Text(value.isEmpty ? "0円" : "\(NT.yen(Int(value) ?? 0))").font(.system(size: 28, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.navy)
                 .frame(maxWidth: .infinity, alignment: .trailing).padding(.horizontal, 14).frame(height: 56)
                 .background(RoundedRectangle(cornerRadius: 12).fill(Color.white))
                 .overlay(RoundedRectangle(cornerRadius: 12).stroke(NFColor.iris, lineWidth: 1.5))
@@ -258,7 +258,7 @@ struct NativePettyView: View {
                             npCard { VStack(spacing: 0) { pettyHeader(p); ForEach(p.rows) { r in pettyRow(r, p) } } }
                         }
                         HStack(alignment: .firstTextBaseline, spacing: 6) {
-                            Text("実査履歴").font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
+                            Text("実査履歴").font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
                             Text("Counts").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                         }
                         if p.counts.isEmpty {
@@ -432,7 +432,7 @@ struct NPPettyAddSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("小口現金の入出金を登録").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("小口現金の入出金を登録").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 Button { onDone() } label: { Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink2).frame(width: 36, height: 36) }
             }
@@ -524,7 +524,7 @@ struct NPPettyCountSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("実残高を数える").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("実残高を数える").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 Button { onDone() } label: { Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink2).frame(width: 36, height: 36) }
             }
@@ -535,7 +535,7 @@ struct NPPettyCountSheet: View {
                         .environment(\.locale, Locale(identifier: "ja_JP"))
                     VStack(alignment: .leading, spacing: 2) {
                         Text("理論残高").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                        Text(NT.yen(expected)).font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy)
+                        Text(NT.yen(expected)).font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.navy)
                     }
                     if !counted.isEmpty {
                         let d = (Int(counted) ?? 0) - expected
@@ -574,7 +574,7 @@ struct NPOpeningSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("小口現金の開始残高を編集").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("小口現金の開始残高を編集").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 Button { onDone() } label: { Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink2).frame(width: 36, height: 36) }
             }

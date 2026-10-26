@@ -31,7 +31,8 @@ export interface NativeLedgerPayload {
   isClosedDay: boolean;
   bufferMinutes: number;
   slotMinutes: number;
-  tables: { id: string; name: string; capacityMin: number; capacityMax: number; statusLabel: string }[];
+  /** isPrivateRoom・isCounter・smoking：卓の設定の席の種類（iPad の台帳の卓の列に小さな印で出す。2026-10-27 Ronnie） */
+  tables: { id: string; name: string; capacityMin: number; capacityMax: number; statusLabel: string; isPrivateRoom: boolean; isCounter: boolean; smoking: boolean }[];
   reservations: ReservationListRow[];
   summary: LedgerSummary;
   sources: { code: string; name: string }[];
@@ -89,7 +90,7 @@ export async function loadNativeLedger(
   const [{ data: tablesData }, { data: businessHoursData }, clerksByStore, { data: bookingSettings }, { data: sourceRows }] = await Promise.all([
     supabase
       .from('restaurant_tables')
-      .select('id, name, capacity_min, capacity_max, current_status')
+      .select('id, name, capacity_min, capacity_max, current_status, is_private_room, is_counter, smoking_allowed')
       .eq('store_id', store.id)
       .eq('status', 'active')
       .order('sort_order'),
@@ -151,7 +152,16 @@ export async function loadNativeLedger(
       else if (seated) statusLabel = `着席中 ${seated.partySize}名 ・ ${seated.guestName} 様`;
       else statusLabel = TABLE_STATUS_LABEL[t.current_status as string] ?? '';
     }
-    return { id: t.id as string, name: t.name as string, capacityMin: t.capacity_min as number, capacityMax: t.capacity_max as number, statusLabel };
+    return {
+      id: t.id as string,
+      name: t.name as string,
+      capacityMin: t.capacity_min as number,
+      capacityMax: t.capacity_max as number,
+      statusLabel,
+      isPrivateRoom: t.is_private_room === true,
+      isCounter: t.is_counter === true,
+      smoking: t.smoking_allowed === true,
+    };
   });
 
   const statusLabels: Record<string, string> = {};

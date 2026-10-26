@@ -474,7 +474,7 @@ struct NRTabSwitch: View {
         let on = tab == t
         return Button { tab = t } label: {
             VStack(spacing: 0) {
-                Text(ja).font(.system(size: 15, weight: .heavy))
+                Text(ja).font(.system(size: 15, weight: NT.strong))
                 Text(en).font(.system(size: 9.5, weight: .bold)).opacity(0.75).lineLimit(1)
             }
             .foregroundColor(on ? .white : NT.purpleDeep)
@@ -494,7 +494,7 @@ struct NRIssuedNotice: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text("領収書 発行済み\(atLabel.isEmpty ? "" : "（\(atLabel)\(count > 1 ? "・\(count)枚" : "")）")")
-                .font(.system(size: 14, weight: .heavy))
+                .font(.system(size: 14, weight: NT.strong))
             Text("\(message)。二重発行を防ぐため、再発行はできません。").font(.system(size: 12)).fixedSize(horizontal: false, vertical: true)
         }
         .foregroundColor(Color(hex: 0x7A4B00))
@@ -616,11 +616,11 @@ struct NativeReceiptView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "fork.knife").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
-                Text(p.receipt.tableName ?? "—").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(p.receipt.tableName ?? "—").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer()
                 statusBadge(p.status)
             }
-            Text(NT.yen(p.receipt.total)).font(.system(size: 30, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+            Text(NT.yen(p.receipt.total)).font(.system(size: 30, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             if p.receipt.refundTotal > 0 {
                 Text("返金 −\(NT.yen(p.receipt.refundTotal))　実質 \(NT.yen(p.receipt.netPaid))").font(.system(size: 13, weight: .bold)).foregroundColor(NT.danger)
             }
@@ -679,7 +679,7 @@ struct NativeReceiptView: View {
             HStack(spacing: 10) {
                 Image(systemName: icon).font(.system(size: 19, weight: .bold))
                 VStack(alignment: .leading, spacing: 1) {
-                    Text(title).font(.system(size: 17, weight: .heavy))
+                    Text(title).font(.system(size: 17, weight: NT.strong))
                     Text(sub).font(.system(size: 11, weight: .bold)).opacity(0.8)
                 }
                 Spacer()

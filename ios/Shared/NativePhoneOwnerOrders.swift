@@ -391,7 +391,7 @@ struct NativePhoneOwnerOrdersView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "calendar").font(.system(size: 15, weight: .bold)).foregroundColor(NT.purple)
-                Text(periodLabel(p)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(periodLabel(p)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 if p.from == p.to && p.from == p.today { NOSBadge(text: "今日", color: NT.purple) }
                 Spacer(minLength: 4)
                 Button { rangeOpen = true } label: {
@@ -433,7 +433,7 @@ struct NativePhoneOwnerOrdersView: View {
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
                     Text("売上（\(multiDay ? "期間" : "当日")・会計済）").font(.system(size: 12, weight: .bold)).foregroundColor(.white.opacity(0.8))
-                    Text(NOS.yen(s.settledSales)).font(.system(size: 30, weight: .heavy)).foregroundColor(.white).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+                    Text(NOS.yen(s.settledSales)).font(.system(size: 30, weight: NT.strong)).foregroundColor(.white).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
                 }
                 Spacer()
             }
@@ -448,7 +448,7 @@ struct NativePhoneOwnerOrdersView: View {
                 Button { model.setStatus("open") } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "clock.badge.exclamationmark").font(.system(size: 13, weight: .bold))
-                        Text("未会計 \(NOS.int(s.unsettledCount))件").font(.system(size: 13, weight: .heavy))
+                        Text("未会計 \(NOS.int(s.unsettledCount))件").font(.system(size: 13, weight: NT.strong))
                         Text(NOS.yen(s.unsettledTotal)).font(.system(size: 13, weight: .bold)).monospacedDigit()
                         Spacer()
                         Text("見る").font(.system(size: 12, weight: .bold))
@@ -466,7 +466,7 @@ struct NativePhoneOwnerOrdersView: View {
     private func tile(_ label: String, _ value: String) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1)
-            Text(value).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 10).padding(.vertical, 9)
@@ -520,7 +520,7 @@ struct NativePhoneOwnerOrdersView: View {
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
                 if searchFocused {
                     Button { searchFocused = false; model.setQuery(searchText) } label: {
-                        Text("探す").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                        Text("探す").font(.system(size: 14, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 14).frame(height: 40)
                             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.purple))
                     }
@@ -538,11 +538,11 @@ struct NativePhoneOwnerOrdersView: View {
         let open = o.status == "open"
         return VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
-                Text("#\(o.orderNo)").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
-                Text(o.place).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text("#\(o.orderNo)").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(o.place).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 0) {
-                    Text(NOS.yen(o.total)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NOS.yen(o.total)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     if o.refundTotal > 0 {
                         Text("純額 \(NOS.yen(o.total - o.refundTotal))").font(.system(size: 10.5, weight: .bold)).foregroundColor(NT.danger).monospacedDigit()
                     }
@@ -660,12 +660,12 @@ struct NOSSlipDetailSheet: View {
         return NPOCard {
             HStack(spacing: 8) {
                 Image(systemName: "fork.knife").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
-                Text(d.place).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(d.place).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer(minLength: 4)
                 NOSBadge(text: sl, color: sc)
                 if d.hasVoid == true { NOSBadge(text: "取消あり", color: NT.ink2) }
             }
-            Text(NOS.yen(d.total)).font(.system(size: 30, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+            Text(NOS.yen(d.total)).font(.system(size: 30, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             VStack(spacing: 6) {
                 info("入店", NOS.time(d.openedAt, withDate: true))
                 info("退店・会計", d.closedAt.map { NOS.time($0, withDate: true) } ?? "—")
@@ -701,7 +701,7 @@ struct NOSSlipDetailSheet: View {
                         }
                     }
                     Spacer(minLength: 6)
-                    Text(NOS.yen(it.lineTotal)).strikethrough(!active).font(.system(size: 14, weight: .heavy)).foregroundColor(active ? NT.ink : NT.ink3).monospacedDigit()
+                    Text(NOS.yen(it.lineTotal)).strikethrough(!active).font(.system(size: 14, weight: NT.strong)).foregroundColor(active ? NT.ink : NT.ink3).monospacedDigit()
                 }
                 .padding(.vertical, 4)
                 .overlay(alignment: .bottom) { Rectangle().fill(NT.line.opacity(0.7)).frame(height: 1).offset(y: 4) }
@@ -726,9 +726,9 @@ struct NOSSlipDetailSheet: View {
 
     private func sumRow(_ label: String, _ value: String, bold: Bool = false, color: Color = NT.ink) -> some View {
         HStack {
-            Text(label).font(.system(size: bold ? 15 : 13.5, weight: bold ? .heavy : .semibold)).foregroundColor(bold ? NT.ink : NT.ink2).lineLimit(1)
+            Text(label).font(.system(size: bold ? 15 : 13.5, weight: bold ? NT.strong : .semibold)).foregroundColor(bold ? NT.ink : NT.ink2).lineLimit(1)
             Spacer()
-            Text(value).font(.system(size: bold ? 18 : 14, weight: bold ? .heavy : .bold)).foregroundColor(color).monospacedDigit()
+            Text(value).font(.system(size: bold ? 18 : 14, weight: bold ? NT.strong : .bold)).foregroundColor(color).monospacedDigit()
         }
     }
 
@@ -743,7 +743,7 @@ struct NOSSlipDetailSheet: View {
                         Text(pm.label).font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink)
                         if pm.status != "completed" { Text("（\(pm.status)）").font(.system(size: 12)).foregroundColor(NT.ink3) }
                         Spacer()
-                        Text(NOS.yen(pm.amount)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NOS.yen(pm.amount)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                     HStack(spacing: 8) {
                         Text(NOS.time(pm.paidAt, withDate: true))
@@ -762,10 +762,10 @@ struct NOSSlipDetailSheet: View {
             ForEach(d.refunds) { r in
                 VStack(alignment: .leading, spacing: 2) {
                     HStack {
-                        Text(r.kind == "void" ? "取消（VOID）" : "返金").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(r.kind == "void" ? "取消（VOID）" : "返金").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                         Text(r.label).font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink2)
                         Spacer()
-                        Text("−\(NOS.yen(r.amount))").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.danger).monospacedDigit()
+                        Text("−\(NOS.yen(r.amount))").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.danger).monospacedDigit()
                     }
                     Text("\(r.reason.map { "理由：\($0)　" } ?? "")\(NOS.time(r.at, withDate: true))").font(.system(size: 11.5)).foregroundColor(NT.ink3)
                     if let items = r.items, !items.isEmpty {
@@ -827,7 +827,7 @@ struct NOSSlipDetailSheet: View {
     private func actionLabel(_ t: String, icon: String, filled: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: icon).font(.system(size: 15, weight: .bold))
-            Text(t).font(.system(size: 15, weight: .heavy))
+            Text(t).font(.system(size: 15, weight: NT.strong))
         }
         .foregroundColor(filled ? .white : NT.purpleDeep)
         .frame(maxWidth: .infinity).frame(height: 50)

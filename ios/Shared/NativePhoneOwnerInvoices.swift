@@ -812,7 +812,7 @@ struct NPIVRootView: View {
                         NOSBadge(text: r.statusLabel, color: NPIVText.statusColor(r.status))
                         if r.overdue { NOSBadge(text: "期限超過", color: NT.danger) }
                         Spacer(minLength: 4)
-                        Text(NPIVText.yen(r.amount)).font(.system(size: 16.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NPIVText.yen(r.amount)).font(.system(size: 16.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                     Text(r.vendorName).font(.system(size: 15.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                     HStack(spacing: 10) {
@@ -880,7 +880,7 @@ struct NPIVRootView: View {
                 } else {
                     Image(systemName: "icloud.and.arrow.up").font(.system(size: 26)).foregroundColor(NT.ink3)
                 }
-                Text("ファイル・写真を保存ボックスへ").font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.ink)
+                Text("ファイル・写真を保存ボックスへ").font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.ink)
                 Text("PDF・PNG・JPEG・WebP／1ファイル20MBまで／いくつでも").font(.system(size: 11.5)).foregroundColor(NT.ink3)
                 HStack(spacing: 8) {
                     uploadButton("ファイル", icon: "folder") { picking = true }
@@ -996,7 +996,7 @@ struct NPIVRootView: View {
                 NOSBadge(text: r.docTypeLabel, color: NT.ink2)
                 NOSBadge(text: "OCR: \(r.ocrLabel)", color: NPIVText.ocrColor(r.ocrStatus))
                 Spacer(minLength: 4)
-                Text(NPIVText.yen(r.amount)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NPIVText.yen(r.amount)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             Button { preview(r.id) } label: {
                 HStack(spacing: 6) {

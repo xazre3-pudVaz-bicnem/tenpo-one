@@ -262,7 +262,7 @@ struct NativeSlipsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Image(systemName: "calendar").foregroundColor(NFColor.royal)
-                Text(periodLabel(p)).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(periodLabel(p)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 // 選んだ期間（昨日・一昨日・今週・今月・日付）の決算レポートをレシートプリンターへ
                 // （2026-10-26 Ronnie「Yo thau bata native ra web bata 決算レポート nikalna milne banau … rezi printer bata print」）
@@ -383,7 +383,7 @@ struct NativeSlipsView: View {
     private func tile(_ label: String, _ value: String, strong: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.system(size: 11)).foregroundColor(strong ? .white.opacity(0.8) : NFColor.ink3).lineLimit(1).minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(strong ? .white : NFColor.ink).lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(strong ? .white : NFColor.ink).lineLimit(1).minimumScaleFactor(0.6)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(.horizontal, 14).padding(.vertical, 12)
@@ -418,7 +418,7 @@ struct NativeSlipsView: View {
         let (sl, sc) = nsStatusLabel(o.status)
         return HStack(alignment: .top, spacing: 20) {
             VStack(alignment: .leading, spacing: 4) {
-                HStack(spacing: 6) { Image(systemName: "receipt"); Text("#\(o.orderNo)") }.font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.royal)
+                HStack(spacing: 6) { Image(systemName: "receipt"); Text("#\(o.orderNo)") }.font(.system(size: 16, weight: NT.strong)).foregroundColor(NFColor.royal)
                 HStack(spacing: 6) { Image(systemName: "fork.knife").font(.system(size: 11)).foregroundColor(NFColor.ink3); Text(o.place).font(.system(size: 14, weight: .bold)) }
                 HStack(spacing: 4) {
                     badge(sl, sc)
@@ -526,7 +526,7 @@ struct NSRyoshushoSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { HStack { Text("伝票 #\(orderNo)"); Spacer(); Text(NT.yen(amount)).font(.system(size: 20, weight: .heavy)).monospacedDigit() } }
+                Section { HStack { Text("伝票 #\(orderNo)"); Spacer(); Text(NT.yen(amount)).font(.system(size: 20, weight: NT.strong)).monospacedDigit() } }
                 Section(header: Text("宛名 / Recipient"), footer: Text("空欄なら手書き用の下線の空欄になります")) {
                     TextField("株式会社〇〇 様", text: $recipient)
                 }
@@ -546,7 +546,7 @@ struct NSRyoshushoSheet: View {
                 if let problem { Section { Text(problem).foregroundColor(NFColor.danger) } }
                 Section(footer: Text("領収書は一度しか発行できません。")) {
                     Button { Task { await issue() } } label: {
-                        Text(busy ? "印刷中…" : "領収書を印刷する").font(.system(size: 17, weight: .heavy)).frame(maxWidth: .infinity)
+                        Text(busy ? "印刷中…" : "領収書を印刷する").font(.system(size: 17, weight: NT.strong)).frame(maxWidth: .infinity)
                     }.disabled(busy)
                 }
             }
@@ -706,7 +706,7 @@ struct NSDetailSheet: View {
         HStack {
             Text(label).fontWeight(bold ? .bold : .regular)
             Spacer()
-            Text(text ?? (v.map { $0 < 0 ? "−\(NT.yen(-$0))" : NT.yen($0) } ?? "")).fontWeight(bold ? .heavy : .regular).monospacedDigit()
+            Text(text ?? (v.map { $0 < 0 ? "−\(NT.yen(-$0))" : NT.yen($0) } ?? "")).fontWeight(bold ? NT.strong : .regular).monospacedDigit()
         }
     }
 }
@@ -751,7 +751,7 @@ struct NSRefundSheet: View {
     var body: some View {
         NavigationStack {
             Form {
-                Section { HStack { Text("返金可能額"); Spacer(); Text(NT.yen(detail.refundable)).fontWeight(.heavy).monospacedDigit() } }
+                Section { HStack { Text("返金可能額"); Spacer(); Text(NT.yen(detail.refundable)).fontWeight(NT.strong).monospacedDigit() } }
                 if !detail.paymentBreakdown.isEmpty {
                     Section(header: Text("この取引の支払内訳"), footer: Text("混合支払の場合、返金する金額がどの支払方法から発生したものかをここで確認してください。")) {
                         ForEach(detail.paymentBreakdown) { b in
@@ -774,7 +774,7 @@ struct NSRefundSheet: View {
                 }
                 if kind == "void" || mode == "amount" {
                     Section("返金額") {
-                        if kind == "void" { Text(NT.yen(detail.refundable)).fontWeight(.heavy) }
+                        if kind == "void" { Text(NT.yen(detail.refundable)).fontWeight(NT.strong) }
                         else { TextField("\(detail.refundable)", text: $amountText).keyboardType(.numberPad) }
                     }
                 } else {
@@ -799,7 +799,7 @@ struct NSRefundSheet: View {
                                 }
                             }
                         }
-                        HStack { Text("返金額"); Spacer(); Text(NT.yen(effectiveAmount)).fontWeight(.heavy) }
+                        HStack { Text("返金額"); Spacer(); Text(NT.yen(effectiveAmount)).fontWeight(NT.strong) }
                     }
                 }
                 Section("返金先（支払方法）") {
@@ -814,7 +814,7 @@ struct NSRefundSheet: View {
                 if let problem { Section { Text(problem).foregroundColor(NFColor.danger) } }
                 Section {
                     Button(role: .destructive) { Task { await submit() } } label: {
-                        Text(model.busy ? "処理中…" : (kind == "void" ? "取消（VOID）を実行" : "\(NT.yen(effectiveAmount)) を返金する")).fontWeight(.heavy).frame(maxWidth: .infinity)
+                        Text(model.busy ? "処理中…" : (kind == "void" ? "取消（VOID）を実行" : "\(NT.yen(effectiveAmount)) を返金する")).fontWeight(NT.strong).frame(maxWidth: .infinity)
                     }.disabled(!canSubmit)
                 }
             }

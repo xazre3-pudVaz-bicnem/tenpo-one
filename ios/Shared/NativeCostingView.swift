@@ -402,7 +402,7 @@ struct NCoStat: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             Text(label).font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.ink3).lineLimit(2)
-            Text(value).font(.system(size: 26, weight: .heavy)).monospacedDigit().foregroundColor(valueColor)
+            Text(value).font(.system(size: 26, weight: NT.strong)).monospacedDigit().foregroundColor(valueColor)
                 .lineLimit(1).minimumScaleFactor(0.5)
             if let sub { Text(sub).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1) }
         }
@@ -422,7 +422,7 @@ struct NCoBadge: View {
     var small = false
 
     var body: some View {
-        Text(text).font(.system(size: small ? 11 : 13, weight: .heavy)).monospacedDigit()
+        Text(text).font(.system(size: small ? 11 : 13, weight: NT.strong)).monospacedDigit()
             .foregroundColor(NCoTone.fg(tone))
             .padding(.horizontal, small ? 6 : 9).padding(.vertical, small ? 2 : 4)
             .background(Capsule().fill(NCoTone.bg(tone)))
@@ -482,7 +482,7 @@ private func ncoTh(_ t: String) -> some View {
 
 /// 表の数字
 private func ncoNum(_ t: String, color: Color = NFColor.ink, bold: Bool = false) -> some View {
-    Text(t).font(.system(size: 15, weight: bold ? .heavy : .semibold)).monospacedDigit().foregroundColor(color).lineLimit(1)
+    Text(t).font(.system(size: 15, weight: bold ? NT.strong : .semibold)).monospacedDigit().foregroundColor(color).lineLimit(1)
         .minimumScaleFactor(0.7)
 }
 
@@ -508,7 +508,7 @@ struct NCoPickSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.ink)
+                Text(title).font(.system(size: 18, weight: NT.strong)).foregroundColor(NFColor.ink)
                 Spacer()
                 Button("閉じる") { close() }.font(.system(size: 16, weight: .bold))
             }
@@ -1555,7 +1555,7 @@ struct NCoLineEditor: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(line == nil ? "食材を追加" : "食材を編集").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.ink)
+                Text(line == nil ? "食材を追加" : "食材を編集").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.ink)
                 Spacer()
                 Button { close() } label: {
                     Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink2)
@@ -1600,7 +1600,7 @@ struct NCoLineEditor: View {
             HStack(spacing: 8) {
                 label("食材")
                 if let o = selectedOption {
-                    Text(o.name).font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.iris).lineLimit(1)
+                    Text(o.name).font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.iris).lineLimit(1)
                 } else {
                     Text("選択してください").font(.system(size: 13)).foregroundColor(NFColor.ink3)
                 }

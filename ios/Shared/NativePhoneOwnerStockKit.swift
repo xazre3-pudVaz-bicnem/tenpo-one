@@ -114,7 +114,7 @@ struct NPZTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1)
-            Text(value).font(.system(size: 20, weight: .heavy)).foregroundColor(tone).monospacedDigit()
+            Text(value).font(.system(size: 20, weight: NT.strong)).foregroundColor(tone).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.6)
             if !sub.isEmpty {
                 Text(sub).font(.system(size: 10.5)).foregroundColor(NT.ink3).lineLimit(2).fixedSize(horizontal: false, vertical: true)
@@ -308,12 +308,12 @@ struct NPZNumberSheet: View {
             }
             .padding(.horizontal, 18).padding(.top, 14)
             VStack(spacing: 3) {
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
+                Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.center)
                 if !caption.isEmpty { Text(caption).font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink3) }
             }
             .padding(.horizontal, 18)
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(display).font(.system(size: 44, weight: .heavy)).foregroundColor(touched ? NT.ink : NT.ink3).monospacedDigit()
+                Text(display).font(.system(size: 44, weight: NT.strong)).foregroundColor(touched ? NT.ink : NT.ink3).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.5)
                 if !unit.isEmpty { Text(unit).font(.system(size: 18, weight: .bold)).foregroundColor(NT.ink2) }
             }
@@ -326,7 +326,7 @@ struct NPZNumberSheet: View {
                             touched = true
                         } label: {
                             VStack(spacing: 0) {
-                                Text(s.0).font(.system(size: 13, weight: .heavy))
+                                Text(s.0).font(.system(size: 13, weight: NT.strong))
                                 Text(NPZ.q(s.1) + unit).font(.system(size: 10.5, weight: .semibold)).opacity(0.75).monospacedDigit()
                             }
                             .foregroundColor(NT.purpleDeep)
@@ -343,14 +343,14 @@ struct NPZNumberSheet: View {
             HStack(spacing: 8) {
                 if let onNext {
                     Button { onNext(value) } label: {
-                        Text("決定して次へ").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purpleDeep)
+                        Text("決定して次へ").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                             .frame(maxWidth: .infinity).frame(height: 52)
                             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac))
                     }
                     .buttonStyle(PressableStyle())
                 }
                 Button { onDone(value) } label: {
-                    Text(okLabel).font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                    Text(okLabel).font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 52)
                         .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.purple))
                 }
@@ -382,7 +382,7 @@ struct NPZBigStepper: View {
             stepButton("minus", enabled: minusEnabled, action: onMinus)
             Button(action: onTap) {
                 HStack(alignment: .firstTextBaseline, spacing: 3) {
-                    Text(value).font(.system(size: placeholder ? 16 : 24, weight: .heavy)).monospacedDigit()
+                    Text(value).font(.system(size: placeholder ? 16 : 24, weight: NT.strong)).monospacedDigit()
                         .foregroundColor(placeholder ? NT.ink3 : tint).lineLimit(1).minimumScaleFactor(0.5)
                     if !unit.isEmpty { Text(unit).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3) }
                 }
@@ -397,7 +397,7 @@ struct NPZBigStepper: View {
 
     private func stepButton(_ icon: String, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 20, weight: .heavy)).foregroundColor(enabled ? NT.purpleDeep : NT.ink3)
+            Image(systemName: icon).font(.system(size: 20, weight: NT.strong)).foregroundColor(enabled ? NT.purpleDeep : NT.ink3)
                 .frame(width: 56, height: 52)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(enabled ? NT.lilac : NT.page))
         }
@@ -565,7 +565,7 @@ struct NPZCardHead: View {
 
     var body: some View {
         HStack {
-            Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+            Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
             Spacer()
             if !trailing.isEmpty { Text(trailing).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3) }
         }

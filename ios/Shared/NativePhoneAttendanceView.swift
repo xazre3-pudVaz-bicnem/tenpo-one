@@ -372,7 +372,7 @@ struct NativePhoneAttendanceView: View {
         } label: {
             VStack(spacing: 8) {
                 Image(systemName: icon).font(.system(size: 26, weight: .bold))
-                Text(label).font(.system(size: 21, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(label).font(.system(size: 21, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7)
             }
             .foregroundColor(filled ? Color.white : NT.ink)
             .frame(maxWidth: .infinity, minHeight: 104)
@@ -462,7 +462,7 @@ struct NativePhoneAttendanceView: View {
         NPOCard {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(alignment: .top) {
-                    Text(r.title).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+                    Text(r.title).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
                     Spacer(minLength: 6)
                     NATBadge(text: "承認待ち", color: NT.warn)
                 }
@@ -564,13 +564,13 @@ struct NPATTodayCard: View {
             HStack(spacing: 10) {
                 NPWAvatar(name: item.name, size: 38, color: item.color)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(item.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                    Text(item.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                     if let s = item.shift {
                         Text("シフト \(s.startTime)〜\(s.endTime)").font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit()
                     }
                 }
                 Spacer(minLength: 6)
-                Text(item.state).font(.system(size: 12.5, weight: .heavy)).foregroundColor(.white)
+                Text(item.state).font(.system(size: 12.5, weight: NT.strong)).foregroundColor(.white)
                     .padding(.horizontal, 10).padding(.vertical, 5)
                     .background(Capsule().fill(item.color))
             }
@@ -588,7 +588,7 @@ struct NPATTodayCard: View {
                         ForEach(r.events) { e in
                             HStack(spacing: 4) {
                                 Text(e.label).font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.ink2)
-                                Text(NPATFmt.time(e.timeLabel)).font(.system(size: 11.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                                Text(NPATFmt.time(e.timeLabel)).font(.system(size: 11.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                                 if e.viaPin { Image(systemName: "key.fill").font(.system(size: 9)).foregroundColor(NT.ink3) }
                             }
                             .padding(.horizontal, 8).padding(.vertical, 4)
@@ -621,7 +621,7 @@ struct NPATTodayCard: View {
     private func cell(_ label: String, _ value: String, danger: Bool = false) -> some View {
         VStack(spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-            Text(value).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(danger ? NT.danger : NT.ink)
+            Text(value).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(danger ? NT.danger : NT.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)
@@ -643,7 +643,7 @@ struct NPATRowCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(row.workDateLabel).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(row.workDateLabel).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 if showStaff {
                     Text(row.staffName ?? "—").font(.system(size: 14.5, weight: .bold)).foregroundColor(NT.ink2).lineLimit(1)
                 }
@@ -694,7 +694,7 @@ struct NPATRowCard: View {
     private func cell(_ label: String, _ value: String, danger: Bool = false) -> some View {
         VStack(spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-            Text(value).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(danger ? NT.danger : NT.ink)
+            Text(value).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(danger ? NT.danger : NT.ink)
                 .lineLimit(1).minimumScaleFactor(0.7)
         }
         .frame(maxWidth: .infinity)

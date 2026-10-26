@@ -99,9 +99,10 @@ enum NHDColor {
     static let bg = Color(hex: 0xF4F5F8)
     static let header = Color(hex: 0x171333)
     static let headerLine = Color(hex: 0x2B2650)
-    static let accent = Color(hex: 0x2A6FE6)
-    static let accentDeep = Color(hex: 0x0A3FA8)
-    static let accentSoft = Color(hex: 0xE7EFFD)
+    // 2026-10-27 03:27 Ronnie「mobile aap ko pani same style le color milau」→ 青をやめて iPad と同じ紫紺・うすい灰色
+    static let accent = Color(hex: 0x37324D)
+    static let accentDeep = Color(hex: 0x24203A)
+    static let accentSoft = Color(hex: 0xEFF0F4)
     static let line = Color(hex: 0xE4E7EE)
     static let ink = Color(hex: 0x292725)
     static let ink2 = Color(hex: 0x50565F)
@@ -521,7 +522,7 @@ struct NativeHandyHomeView: View {
         Button(action: action) {
             HStack(spacing: 10) {
                 Image(systemName: icon).font(.system(size: 19, weight: .semibold))
-                Text(title).font(.system(size: 11, weight: .heavy)).tracking(0.5)
+                Text(title).font(.system(size: 11, weight: NT.strong)).tracking(0.5)
             }
             .foregroundColor(on ? .white : NHDColor.navMuted)
             .frame(maxWidth: .infinity).frame(minHeight: 46)
@@ -704,7 +705,7 @@ struct NativeHandySheet<Content: View>: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text(title).font(.system(size: 16, weight: .heavy)).foregroundColor(NHDColor.ink)
+                Text(title).font(.system(size: 16, weight: NT.strong)).foregroundColor(NHDColor.ink)
                 Spacer()
                 Button(action: onClose) {
                     Image(systemName: "xmark").font(.system(size: 15, weight: .bold)).foregroundColor(NHDColor.ink2)
@@ -850,14 +851,14 @@ struct NativePhoneTableTile: View {
                 .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
                 .overlay(
                     RoundedRectangle(cornerRadius: 12, style: .continuous)
-                        .strokeBorder(table.linkedNames != nil ? NFColor.royal : Color(hex: 0x2A6FE6).opacity(table.order == nil ? 0.35 : 0.55),
+                        .strokeBorder(table.linkedNames != nil ? NFColor.royal : OV.primary.opacity(table.order == nil ? 0.18 : 0.35),
                                       lineWidth: table.linkedNames != nil ? 2 : 1)
                 )
                 .overlay {
-                    // 呼び出し中は縁が点滅（5 分過ぎ＝赤・お会計＝緑・スタッフ＝橙。iPad と同じ色）
+                    // 呼び出し中は縁が点滅（はじめ黄色・5 分過ぎ＝赤。iPad と同じ色。2026-10-27 03:27 Ronnie「mobile aap ko pani same style」）
                     if let info = callInfo {
                         RoundedRectangle(cornerRadius: 12, style: .continuous)
-                            .strokeBorder(NativeTableCard.callColor(info, border: true), lineWidth: 3)
+                            .strokeBorder(NativeTableCard.padCallFill(info), lineWidth: 3)
                             .opacity(pulse ? 1 : 0.3)
                     }
                 }
@@ -886,16 +887,16 @@ struct NativePhoneTableTile: View {
                 // 1 行目：番号（左）・プランの印 1 つ・人数（右。お客様が来てから）
                 HStack(alignment: .center, spacing: 3 * s) {
                     Text(table.name)
-                        .font(.system(size: 17 * s, weight: .heavy)).monospacedDigit()
+                        .font(.system(size: 17 * s, weight: NT.strong)).monospacedDigit()
                         .foregroundColor(order == nil ? NFColor.ink2 : NFColor.ink)
                         .lineLimit(1).minimumScaleFactor(0.6)
                     if table.linkedNames != nil {
                         Image(systemName: "link").font(.system(size: 10 * s, weight: .bold)).foregroundColor(NFColor.royal)
                     }
-                    if let mark = NativeTableCard.marks(order).first {
-                        Image(systemName: mark).font(.system(size: 9 * s, weight: .bold)).foregroundColor(.white)
+                    if let mark = NativeTableCard.padMarks(order).first {
+                        Image(systemName: mark).font(.system(size: 9 * s, weight: .semibold)).foregroundColor(.white)
                             .frame(width: 16 * s, height: 16 * s)
-                            .background(RoundedRectangle(cornerRadius: 5 * s, style: .continuous).fill(NativeTableCard.markColor(mark)))
+                            .background(RoundedRectangle(cornerRadius: 5 * s, style: .continuous).fill(OV.primary))
                     }
                     Spacer(minLength: 0)
                     if let o = order {
@@ -903,7 +904,7 @@ struct NativePhoneTableTile: View {
                             Image(systemName: "person.fill").font(.system(size: 10 * s, weight: .semibold)).foregroundColor(NFColor.ink3)
                             Text("\(o.guestCount)")
                         }
-                        .font(.system(size: 15 * s, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                        .font(.system(size: 15 * s, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.ink)
                         .fixedSize()
                     }
                 }
@@ -920,7 +921,7 @@ struct NativePhoneTableTile: View {
                 ZStack(alignment: .top) {
                     b.color
                     Text(order.map { NT.yen($0.total) } ?? b.jp)
-                        .font(.system(size: 14 * s, weight: .heavy)).monospacedDigit()
+                        .font(.system(size: 14 * s, weight: NT.strong)).monospacedDigit()
                         .foregroundColor(b.ink).lineLimit(1).minimumScaleFactor(0.6)
                         .padding(.horizontal, 6 * s)
                         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .trailing)
@@ -946,7 +947,7 @@ struct NativePhoneTableTile: View {
         HStack(spacing: 2 * s) {
             Image(systemName: "hourglass").font(.system(size: 11 * s, weight: .semibold))
             Text(String(format: "%@%d:%02d", mins < 0 ? "−" : "", abs(mins) / 60, abs(mins) % 60))
-                .font(.system(size: 18 * s, weight: .heavy)).monospacedDigit()
+                .font(.system(size: 18 * s, weight: NT.strong)).monospacedDigit()
         }
         .foregroundColor(mins < 0 ? NFColor.danger : NFColor.royal)
         .lineLimit(1).minimumScaleFactor(0.6)
@@ -954,10 +955,10 @@ struct NativePhoneTableTile: View {
         if let info = callInfo {
             // 呼び出し：ベル（お会計は財布）・回数・何分前
             HStack(spacing: 2 * s) {
-                Image(systemName: info.checkout ? NativeTableCard.walletSymbol : "bell.fill").font(.system(size: 9 * s, weight: .bold))
-                Text("\(info.count)回 \(info.minutes)分").font(.system(size: 11 * s, weight: .heavy)).monospacedDigit()
+                Image(systemName: info.checkout ? NativeTableCard.yenSymbol : "bell.fill").font(.system(size: 9 * s, weight: .bold))
+                Text("\(info.count)回 \(info.minutes)分").font(.system(size: 11 * s, weight: NT.strong)).monospacedDigit()
             }
-            .foregroundColor(NativeTableCard.callColor(info, border: false))
+            .foregroundColor(info.late ? NativeTableCard.callRed : OV.primary)
             .lineLimit(1).minimumScaleFactor(0.6)
             .frame(maxWidth: .infinity, alignment: .trailing)
         } else if let last = o.lastOrderAtMs {
@@ -1191,8 +1192,8 @@ struct NativeHandyLoginView: View {
                     HStack(spacing: 9) {
                         Image("BrandMark").resizable().scaledToFit().frame(width: 45, height: 48)
                             .clipShape(RoundedRectangle(cornerRadius: 10, style: .continuous))
-                        Text("TENPO").font(.system(size: 30, weight: .heavy)).foregroundColor(Color(hex: 0x8FB4FF))
-                        Text("ONE").font(.system(size: 30, weight: .heavy)).foregroundColor(.white)
+                        Text("TENPO").font(.system(size: 30, weight: NT.strong)).foregroundColor(Color(hex: 0x8FB4FF))
+                        Text("ONE").font(.system(size: 30, weight: NT.strong)).foregroundColor(.white)
                     }
                     Text("HANDY · TENPO ONE").font(.system(size: 11, weight: .semibold)).tracking(1.2).foregroundColor(.white).padding(.top, 28)
                     HStack(spacing: 6) {

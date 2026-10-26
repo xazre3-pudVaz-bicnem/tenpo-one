@@ -346,9 +346,9 @@ struct NativeSoldOutView: View {
                             ForEach(secs) { s in
                                 VStack(alignment: .leading, spacing: 8) {
                                     HStack(alignment: .firstTextBaseline, spacing: 8) {
-                                        Text(s.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.navy)
+                                        Text(s.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NFColor.navy)
                                         let n = s.items.filter(\.isSoldOut).count
-                                        if n > 0 { Text("売切 \(n)").font(.system(size: 12, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 2).background(Capsule().fill(NFColor.danger)) }
+                                        if n > 0 { Text("売切 \(n)").font(.system(size: 12, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 8).padding(.vertical, 2).background(Capsule().fill(NFColor.danger)) }
                                     }
                                     LazyVGrid(columns: [GridItem(.adaptive(minimum: 300), spacing: 10)], spacing: 10) {
                                         ForEach(s.items) { it in itemCard(it) }
@@ -439,7 +439,7 @@ struct NativeSoldOutView: View {
                     ProgressView().frame(width: 64)
                 } else {
                     Text(it.isSoldOut ? "売切" : "販売中")
-                        .font(.system(size: 13, weight: .heavy)).foregroundColor(it.isSoldOut ? .white : NFColor.success)
+                        .font(.system(size: 13, weight: NT.strong)).foregroundColor(it.isSoldOut ? .white : NFColor.success)
                         .frame(width: 64, height: 32)
                         .background(Capsule().fill(it.isSoldOut ? NFColor.danger : NFColor.successSoft))
                 }
@@ -772,7 +772,7 @@ struct NSPCard<Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             VStack(alignment: .leading, spacing: 3) {
                 HStack(alignment: .firstTextBaseline, spacing: 8) {
-                    Text(title).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
+                    Text(title).font(.system(size: 18, weight: NT.strong)).foregroundColor(NFColor.navy)
                     // 英語だけの副題は出さない（日本語の補足＝件数などは出す）
                     if !en.isEmpty && !NSPText.isAsciiOnly(en) { Text(en).font(.system(size: 12.5, weight: .medium)).foregroundColor(NFColor.ink3) }
                 }
@@ -996,7 +996,7 @@ struct NativeHoursView: View {
                         if edit {
                             // まとめて変更（2026-09-27 Ronnie「一緒に変更する場合のも」）
                             HStack(spacing: 10) {
-                                Text("まとめて変更").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy).frame(width: 100, alignment: .leading)
+                                Text("まとめて変更").font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.navy).frame(width: 100, alignment: .leading)
                                 timeField("開店", value: bulkOpen, options: NativeHoursModel.openOptions) { bulkOpen = $0 }
                                 timeField("閉店", value: bulkClose, options: NativeHoursModel.closeOptions) { bulkClose = $0 }
                                 timeField("最終入店", value: bulkLast, options: NativeHoursModel.closeOptions) { bulkLast = $0 }
@@ -1009,9 +1009,9 @@ struct NativeHoursView: View {
                         }
                         ForEach(model.hours, id: \.dayOfWeek) { h in
                             HStack(spacing: 10) {
-                                Text("\(NativeHoursModel.dayLabels[h.dayOfWeek])曜日").font(.system(size: 16, weight: .heavy)).foregroundColor(h.isClosed ? NFColor.ink3 : NFColor.navy).frame(width: 70, alignment: .leading)
+                                Text("\(NativeHoursModel.dayLabels[h.dayOfWeek])曜日").font(.system(size: 16, weight: NT.strong)).foregroundColor(h.isClosed ? NFColor.ink3 : NFColor.navy).frame(width: 70, alignment: .leading)
                                 Button { model.update(h.dayOfWeek) { $0.isClosed.toggle() } } label: {
-                                    Text(h.isClosed ? "定休日" : "営業").font(.system(size: 13, weight: .heavy)).foregroundColor(h.isClosed ? .white : NFColor.success)
+                                    Text(h.isClosed ? "定休日" : "営業").font(.system(size: 13, weight: NT.strong)).foregroundColor(h.isClosed ? .white : NFColor.success)
                                         .frame(width: 72, height: 34)
                                         .background(Capsule().fill(h.isClosed ? NFColor.ink3 : NFColor.successSoft))
                                 }
@@ -1085,7 +1085,7 @@ struct NativeHoursView: View {
                         ForEach(p.holidays) { h in
                             HStack(spacing: 12) {
                                 Text(Self.pretty(h.holidayDate)).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink).monospacedDigit()
-                                if h.isTemporary { Text("臨時").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.saffron)) }
+                                if h.isTemporary { Text("臨時").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.saffron)) }
                                 Text(h.name ?? "").font(.system(size: 14)).foregroundColor(NFColor.ink2)
                                 Spacer()
                                 if edit {
@@ -1308,7 +1308,7 @@ struct NativeStoreView: View {
         HStack(alignment: .center, spacing: 16) {
             HStack(spacing: 4) {
                 Text(label).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
-                if required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
+                if required { Text("必須").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
             }
             .frame(width: 180, alignment: .leading)
             content()
@@ -1394,7 +1394,7 @@ struct NSPRow<Content: View>: View {
             VStack(alignment: .leading, spacing: 2) {
                 HStack(spacing: 5) {
                     Text(label).font(.system(size: 17, weight: .bold)).foregroundColor(NFColor.ink)
-                    if required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
+                    if required { Text("必須").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
                 }
                 if !en.isEmpty && !NSPText.isAsciiOnly(en) { Text(en).font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3) }
             }
@@ -1482,7 +1482,7 @@ struct NativeTaxView: View {
                         if p.rows.isEmpty { Text("税率がまだ登録されていません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.rows) { r in
                             HStack(spacing: 12) {
-                                Text(r.rate == r.rate.rounded() ? "\(Int(r.rate))%" : "\(r.rate)%").font(.system(size: 20, weight: .heavy)).foregroundColor(NFColor.navy).monospacedDigit().frame(width: 72, alignment: .leading)
+                                Text(r.rate == r.rate.rounded() ? "\(Int(r.rate))%" : "\(r.rate)%").font(.system(size: 20, weight: NT.strong)).foregroundColor(NFColor.navy).monospacedDigit().frame(width: 72, alignment: .leading)
                                 VStack(alignment: .leading, spacing: 3) {
                                     Text(r.name).font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink)
                                     HStack(spacing: 6) {
@@ -1512,7 +1512,7 @@ struct NativeTaxView: View {
     }
 
     private func tag(_ t: String, _ c: Color) -> some View {
-        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+        Text(t).font(.system(size: 11, weight: NT.strong)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }
 
     private var form: some View {
@@ -1738,7 +1738,7 @@ struct NativeAlertsView: View {
                                     HStack(spacing: 6) {
                                         Text("いま：\(NativeAlertsModel.num(it.effectiveValue))\(it.unit)").font(.system(size: 12.5, weight: .bold)).foregroundColor(NFColor.iris)
                                         Text(it.effectiveSource == "store" ? "（この店）" : it.effectiveSource == "org" ? "（企業既定）" : "（標準）").font(.system(size: 12)).foregroundColor(NFColor.ink3)
-                                        if it.effectiveSource == "store" && !it.storeEnabled || it.effectiveSource == "org" && !it.orgEnabled { Text("無効").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.ink3)) }
+                                        if it.effectiveSource == "store" && !it.storeEnabled || it.effectiveSource == "org" && !it.orgEnabled { Text("無効").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.ink3)) }
                                     }
                                 }
                                 .frame(width: 300, alignment: .leading)
@@ -1815,10 +1815,10 @@ struct NativeApprovalsView: View {
                         if p.rows.isEmpty { Text("ルールがまだありません（承認なしで通ります）").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18) }
                         ForEach(p.rows) { r in
                             HStack(spacing: 12) {
-                                Text(model.label(p.targets, r.target)).font(.system(size: 13, weight: .heavy)).foregroundColor(NFColor.ink2).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(NFColor.lilac)).frame(width: 110, alignment: .leading)
+                                Text(model.label(p.targets, r.target)).font(.system(size: 13, weight: NT.strong)).foregroundColor(NFColor.ink2).padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(NFColor.lilac)).frame(width: 110, alignment: .leading)
                                 Text("\(NT.yen(r.minAmount)) 〜 \(r.maxAmount.map { NT.yen($0) } ?? "上限なし")").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).monospacedDigit().frame(width: 230, alignment: .leading)
                                 Text(model.label(p.roles, r.approverRole)).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.iris)
-                                if r.allowSelfApprove { Text("自己承認可").font(.system(size: 11, weight: .heavy)).foregroundColor(NFColor.saffron).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(NFColor.saffron.opacity(0.5), lineWidth: 1)) }
+                                if r.allowSelfApprove { Text("自己承認可").font(.system(size: 11, weight: NT.strong)).foregroundColor(NFColor.saffron).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(NFColor.saffron.opacity(0.5), lineWidth: 1)) }
                                 Spacer()
                                 if p.canEdit {
                                     NSPButton(text: "編集", icon: "pencil") { model.startEdit(r) }
@@ -1959,11 +1959,11 @@ struct NativeAccountsView: View {
                         VStack(spacing: 0) {
                             ForEach(rows) { r in
                                 HStack(spacing: 12) {
-                                    Text(r.code).font(.system(size: 14, weight: .heavy, design: .monospaced)).foregroundColor(NFColor.ink3).frame(width: 70, alignment: .leading)
+                                    Text(r.code).font(.system(size: 14, weight: NT.strong, design: .monospaced)).foregroundColor(NFColor.ink3).frame(width: 70, alignment: .leading)
                                     Text(r.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink).frame(minWidth: 180, alignment: .leading)
                                     if let st = r.subType { Text(model.label(p.subTypes, st)).font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink2).padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NFColor.lilac)) }
                                     Text(model.label(p.taxTreatments, r.defaultTaxTreatment)).font(.system(size: 12.5)).foregroundColor(NFColor.ink3)
-                                    if r.isSystem { Text("標準").font(.system(size: 11, weight: .heavy)).foregroundColor(NFColor.iris).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(NFColor.iris.opacity(0.5), lineWidth: 1)) }
+                                    if r.isSystem { Text("標準").font(.system(size: 11, weight: NT.strong)).foregroundColor(NFColor.iris).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(NFColor.iris.opacity(0.5), lineWidth: 1)) }
                                     Spacer()
                                     if p.canEdit {
                                         NSPButton(text: "編集", icon: "pencil") { model.startEdit(r) }
@@ -2104,7 +2104,7 @@ struct NativeHandyDevicesView: View {
                                         }
                                         VStack(alignment: .leading, spacing: 8) {
                                             Text("スマホのカメラでこの QR を読んでください").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
-                                            Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: .heavy)).foregroundColor(NFColor.iris).monospacedDigit()
+                                            Text("あと \(left / 60):\(String(format: "%02d", left % 60))").font(.system(size: 22, weight: NT.strong)).foregroundColor(NFColor.iris).monospacedDigit()
                                             NSPButton(text: "読み直す", icon: "arrow.clockwise") { Task { await model.refresh() } }
                                         }
                                     }
@@ -2548,10 +2548,10 @@ struct NativeMenuItemsView: View {
                 }
             }
             Spacer()
-            Text(NT.yen(Int(it.price))).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy).monospacedDigit()
+            Text(NT.yen(Int(it.price))).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy).monospacedDigit()
             if let t = it.takeoutPrice { Text("TO \(NT.yen(Int(t)))").font(.system(size: 12)).foregroundColor(NFColor.ink3).monospacedDigit() }
             Button { Task { await model.toggleSoldOut(it) } } label: {
-                Text(it.isSoldOut ? "売切" : "販売中").font(.system(size: 12, weight: .heavy)).foregroundColor(it.isSoldOut ? .white : NFColor.success)
+                Text(it.isSoldOut ? "売切" : "販売中").font(.system(size: 12, weight: NT.strong)).foregroundColor(it.isSoldOut ? .white : NFColor.success)
                     .frame(width: 60, height: 30).background(Capsule().fill(it.isSoldOut ? NFColor.danger : NFColor.successSoft))
             }
             .buttonStyle(PressableStyle()).disabled(!p.canEdit || model.busy != nil)
@@ -2567,7 +2567,7 @@ struct NativeMenuItemsView: View {
     }
 
     private func tag(_ t: String, _ c: Color) -> some View {
-        Text(t).font(.system(size: 10.5, weight: .heavy)).foregroundColor(c).padding(.horizontal, 6).padding(.vertical, 2).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
+        Text(t).font(.system(size: 10.5, weight: NT.strong)).foregroundColor(c).padding(.horizontal, 6).padding(.vertical, 2).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }
 
     /// プランの一覧の印：コース／飲み放題…・料理の数・選べるメインの数
@@ -3378,7 +3378,7 @@ struct NativePaymentsView: View {
     private func chip(_ name: String, _ status: String, _ color: Color) -> some View {
         HStack(spacing: 6) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(name).font(.system(size: 13, weight: .heavy)).foregroundColor(NFColor.ink)
+            Text(name).font(.system(size: 13, weight: NT.strong)).foregroundColor(NFColor.ink)
             Text(status).font(.system(size: 12.5, weight: .bold)).foregroundColor(NFColor.ink2)
         }
         .padding(.horizontal, 12).frame(height: 36)
@@ -3531,7 +3531,7 @@ struct NativePaymentsView: View {
                                     .font(.system(size: 12)).foregroundColor(NFColor.ink3)
                                 HStack(spacing: 6) {
                                     Image(systemName: "key").font(.system(size: 13, weight: .bold))
-                                    Text(formatLinkCode(t.linkCode)).font(.system(size: 16, weight: .heavy, design: .monospaced)).tracking(1.5)
+                                    Text(formatLinkCode(t.linkCode)).font(.system(size: 16, weight: NT.strong, design: .monospaced)).tracking(1.5)
                                 }
                                 .foregroundColor(NFColor.iris)
                                 .padding(.horizontal, 10).padding(.vertical, 4).background(RoundedRectangle(cornerRadius: 8).fill(NFColor.lilac))
@@ -3774,7 +3774,7 @@ struct NativeStaffView: View {
     }
 
     private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
-        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+        Text(t).font(.system(size: 11, weight: NT.strong)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
             .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }
 
@@ -3787,7 +3787,7 @@ struct NativeStaffView: View {
             HStack(spacing: 14) {
                 ZStack {
                     Circle().fill(r.status == "active" ? NFColor.irisSoft : NFColor.lilacSoft).frame(width: 40, height: 40)
-                    Text(String(r.displayName.prefix(1))).font(.system(size: 16, weight: .heavy)).foregroundColor(r.status == "active" ? NFColor.iris : NFColor.ink3)
+                    Text(String(r.displayName.prefix(1))).font(.system(size: 16, weight: NT.strong)).foregroundColor(r.status == "active" ? NFColor.iris : NFColor.ink3)
                 }
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 6) {
@@ -3902,11 +3902,11 @@ struct NativeStaffView: View {
         HStack(spacing: 14) {
             Image(systemName: "key.fill").font(.system(size: 20, weight: .bold)).foregroundColor(NFColor.iris)
             VStack(alignment: .leading, spacing: 4) {
-                Text(sec.title).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(sec.title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Text("\(sec.who) さんの初期パスワード。本人に安全な方法で伝えてください（この画面を閉じると見られません）").font(.system(size: 12.5)).foregroundColor(NFColor.ink2)
             }
             Spacer()
-            Text(sec.value).font(.system(size: 20, weight: .heavy, design: .monospaced)).foregroundColor(NFColor.ink).padding(.horizontal, 14).frame(height: 44)
+            Text(sec.value).font(.system(size: 20, weight: NT.strong, design: .monospaced)).foregroundColor(NFColor.ink).padding(.horizontal, 14).frame(height: 44)
                 .background(RoundedRectangle(cornerRadius: 10).fill(Color.white)).overlay(RoundedRectangle(cornerRadius: 10).stroke(NFColor.line, lineWidth: 1))
             NSPButton(text: "コピー", icon: "doc.on.doc") { UIPasteboard.general.string = sec.value; model.toast = "パスワードをコピーしました" }
             NSPButton(text: "閉じる") { model.secret = nil }
@@ -4019,7 +4019,7 @@ struct NativeReservationBookView: View {
     }
 
     private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
-        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+        Text(t).font(.system(size: 11, weight: NT.strong)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
             .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }
     private func copyBox(_ text: String, label: String) -> some View {
@@ -4324,7 +4324,7 @@ struct NativeIntegrationsScreen: View {
                                 VStack(alignment: .leading, spacing: 3) {
                                     HStack(spacing: 8) {
                                         Text(r.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
-                                        Text(r.status).font(.system(size: 11, weight: .heavy)).foregroundColor(toneColor(r.tone)).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(toneColor(r.tone).opacity(0.5), lineWidth: 1))
+                                        Text(r.status).font(.system(size: 11, weight: NT.strong)).foregroundColor(toneColor(r.tone)).padding(.horizontal, 7).padding(.vertical, 2).overlay(Capsule().stroke(toneColor(r.tone).opacity(0.5), lineWidth: 1))
                                     }
                                     Text(r.note).font(.system(size: 12.5)).foregroundColor(NFColor.ink3).fixedSize(horizontal: false, vertical: true)
                                 }
@@ -4606,7 +4606,7 @@ struct NativeTablesScreen: View {
         .buttonStyle(PressableStyle())
     }
     private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
-        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+        Text(t).font(.system(size: 11, weight: NT.strong)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
             .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }
     private func small(_ text: String, icon: String? = nil, danger: Bool = false, disabled: Bool = false, action: @escaping () -> Void) -> some View {
@@ -5146,7 +5146,7 @@ struct NativeMenuBulkScreen: View {
     }
 
     private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
-        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+        Text(t).font(.system(size: 11, weight: NT.strong)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
             .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }
     private func check(_ on: Bool, action: @escaping () -> Void) -> some View {
@@ -5172,7 +5172,7 @@ struct NativeMenuBulkScreen: View {
     private func bulkBar(_ p: NMBKPayload) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
-                Text("\(model.selected.count) 品を選択中").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("\(model.selected.count) 品を選択中").font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Menu { Button("カテゴリ未設定") { model.applyAll { $0.categoryId = nil } }; ForEach(p.categories) { c in Button(c.name) { model.applyAll { $0.categoryId = c.id } } } } label: { menuBox("カテゴリを変える") }
                 Menu { ForEach(p.itemTypes) { t in Button(t.label) { model.applyAll { $0.itemType = t.id } } } } label: { menuBox("種別を変える") }
                 Menu {
@@ -5312,7 +5312,7 @@ struct NativeImportScreen: View {
                                 ForEach(t.fields) { f in
                                     HStack(spacing: 4) {
                                         Text(f.label).font(.system(size: 12.5, weight: .bold)).foregroundColor(NFColor.ink2)
-                                        if f.required { Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
+                                        if f.required { Text("必須").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NFColor.danger)) }
                                     }
                                     .padding(.horizontal, 10).frame(height: 32).background(Capsule().fill(NFColor.lilacSoft))
                                 }
@@ -5339,7 +5339,7 @@ struct NativeImportScreen: View {
     }
 
     private func tag(_ t: String, _ c: Color, fill: Color = .clear) -> some View {
-        Text(t).font(.system(size: 11, weight: .heavy)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
+        Text(t).font(.system(size: 11, weight: NT.strong)).foregroundColor(c).padding(.horizontal, 7).padding(.vertical, 2)
             .background(Capsule().fill(fill)).overlay(Capsule().stroke(c.opacity(0.5), lineWidth: 1))
     }
 
@@ -5397,7 +5397,7 @@ struct NativeImportScreen: View {
         NSPCard(title: "取り込みました", en: t.label) {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 14) {
-                    Text("登録 \(res.inserted) 件").font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.success)
+                    Text("登録 \(res.inserted) 件").font(.system(size: 16, weight: NT.strong)).foregroundColor(NFColor.success)
                     if let u = res.updated, u > 0 { Text("更新 \(u) 件").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink2) }
                     Text("スキップ \(res.skipped) 件").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink3)
                     if !res.failed.isEmpty { Text("失敗 \(res.failed.count) 件").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.danger) }

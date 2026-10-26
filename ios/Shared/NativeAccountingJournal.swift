@@ -270,7 +270,7 @@ struct NAccJournalPage: View {
                             }
                         }
                         Spacer(minLength: 8)
-                        Text(NT.yen(e.debitTotal)).font(.system(size: 16, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                        Text(NT.yen(e.debitTotal)).font(.system(size: 16, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                     }
                     .contentShape(Rectangle())
                 }
@@ -444,7 +444,7 @@ struct NAccEntryEditor: View {
                     HStack {
                         Text("差額").fontWeight(.bold)
                         Spacer()
-                        Text(NT.yen(abs(debit - credit))).font(.system(size: 18, weight: .heavy)).monospacedDigit()
+                        Text(NT.yen(abs(debit - credit))).font(.system(size: 18, weight: NT.strong)).monospacedDigit()
                             .foregroundColor(balanced ? NFColor.success : NFColor.danger)
                     }
                     if let problem {
@@ -675,7 +675,7 @@ struct NAccPeriodPanel: View {
                 Text("対象月").font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3)
                 Button { Task { await load(NAccText.shiftMonth(p.month, -1)) } } label: { Image(systemName: "chevron.left") }
                     .buttonStyle(.bordered)
-                Text(p.monthLabel).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).frame(minWidth: 100)
+                Text(p.monthLabel).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).frame(minWidth: 100)
                 Button { Task { await load(NAccText.shiftMonth(p.month, 1)) } } label: { Image(systemName: "chevron.right") }
                     .buttonStyle(.bordered)
                 NPBadge(text: p.statusLabel, color: p.status == "closed" ? NFColor.success : NT.ink3)

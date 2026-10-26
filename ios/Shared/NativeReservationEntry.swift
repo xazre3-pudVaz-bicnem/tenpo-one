@@ -365,10 +365,10 @@ struct NativeReservationEntry: View {
                     HStack(spacing: 7) {
                         ZStack {
                             Circle().fill(on ? NLColor.yellow : done ? Color.white.opacity(0.9) : Color.white.opacity(0.15)).frame(width: 26, height: 26)
-                            if done { Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.navy) }
-                            else { Text("\(st.rawValue + 1)").font(.system(size: 13, weight: .heavy)).foregroundColor(on ? NLColor.navy : .white.opacity(0.7)) }
+                            if done { Image(systemName: "checkmark").font(.system(size: 12, weight: NT.strong)).foregroundColor(NLColor.navy) }
+                            else { Text("\(st.rawValue + 1)").font(.system(size: 13, weight: NT.strong)).foregroundColor(on ? NLColor.navy : .white.opacity(0.7)) }
                         }
-                        Text(st.title).font(.system(size: 14, weight: .heavy)).foregroundColor(on ? .white : .white.opacity(done ? 0.85 : 0.5))
+                        Text(st.title).font(.system(size: 14, weight: NT.strong)).foregroundColor(on ? .white : .white.opacity(done ? 0.85 : 0.5))
                     }
                 }
                 .buttonStyle(.plain)
@@ -383,7 +383,7 @@ struct NativeReservationEntry: View {
     private func modeTab(_ t: String, icon: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack(spacing: 6) { Image(systemName: icon); Text(t) }
-                .font(.system(size: 15, weight: .heavy))
+                .font(.system(size: 15, weight: NT.strong))
                 .foregroundColor(on ? NLColor.navy : .white)
                 .padding(.horizontal, 18).frame(height: 40)
                 .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(on ? NLColor.yellow : Color.clear))
@@ -399,10 +399,10 @@ struct NativeReservationEntry: View {
             if let title {
                 HStack(spacing: 10) {
                     if let icon {
-                        Image(systemName: icon).font(.system(size: 13, weight: .heavy)).foregroundColor(NLColor.navy)
+                        Image(systemName: icon).font(.system(size: 13, weight: NT.strong)).foregroundColor(NLColor.navy)
                             .frame(width: 28, height: 28).background(Circle().fill(NLColor.yellow))
                     }
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NLColor.navy)
                     Spacer(minLength: 0)
                 }
             }
@@ -479,13 +479,13 @@ struct NativeReservationEntry: View {
                 ScrollView {
                     VStack(alignment: .leading, spacing: 18) {
                         // 当たり前のもの（飲み放題・食べ放題・コース・誕生日・記念日・子連れ）は印つきでいちばん上に（2026-10-24 21:18 Ronnie）
-                        Text("よく使うもの").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                        Text("よく使うもの").font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                         NRWStandardKeysPicker(selected: $tags)
                         divider
                         NRWKeywordsEditor(keywords: Binding(get: { (entry?.keywords ?? []).filter { !NRWStandardKeys.list.contains($0) } }, set: { entry?.keywords = $0 }), selected: $tags, save: NRWLabelsApi.saveKeywords)
                         if let groups = entry?.tagGroups, !groups.isEmpty {
                             divider
-                            Text("お客様・予約のタグ").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                            Text("お客様・予約のタグ").font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                             NRWTagGroupsPicker(groups: groups, selected: $tagLabels)
                         } else if entry == nil {
                             Text(entryLoading ? "キーワード・タグを読み込んでいます…" : "キーワード・タグを読めませんでした").font(.system(size: 13, weight: .semibold)).foregroundColor(NLColor.muted)
@@ -545,7 +545,7 @@ struct NativeReservationEntry: View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
                 Text(label).font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.muted).frame(width: 84, alignment: .leading)
-                Text(value).font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(2)
+                Text(value).font(.system(size: 17, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(2)
                 Spacer(minLength: 8)
                 Button { withAnimation(.easeOut(duration: 0.18)) { step = go } } label: {
                     Text("変更").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.blue)
@@ -576,7 +576,7 @@ struct NativeReservationEntry: View {
         Button(action: action) {
             HStack(spacing: 8) {
                 Image(systemName: on ? "checkmark.circle.fill" : "person.crop.circle").font(.system(size: 16, weight: .semibold))
-                Text(t).font(.system(size: 15, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(t).font(.system(size: 15, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7)
             }
             .foregroundColor(on ? .white : NLColor.ink)
             .frame(maxWidth: .infinity).frame(height: 52)
@@ -610,9 +610,9 @@ struct NativeReservationEntry: View {
     private func field<Content: View>(_ title: String, required: Bool = false, @ViewBuilder content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
-                Text(title).font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text(title).font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                 if required {
-                    Text("必須").font(.system(size: 10, weight: .heavy)).foregroundColor(.white)
+                    Text("必須").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 5).padding(.vertical, 2)
                         .background(RoundedRectangle(cornerRadius: 4).fill(NLColor.red))
                 }
@@ -661,7 +661,7 @@ struct NativeReservationEntry: View {
                         let on = v == selected
                         Button { onPick(v) } label: {
                             HStack(alignment: .firstTextBaseline, spacing: 2) {
-                                Text(v).font(.system(size: 22, weight: on ? .heavy : .medium)).monospacedDigit()
+                                Text(v).font(.system(size: 22, weight: on ? NT.strong : .medium)).monospacedDigit()
                                 Text(suffix).font(.system(size: 12, weight: .bold)).foregroundColor(on ? NLColor.navy : NLColor.muted)
                             }
                             .foregroundColor(on ? NLColor.navy : NLColor.ink)
@@ -685,14 +685,14 @@ struct NativeReservationEntry: View {
     // 確保時間：−30・−5・＋5・＋30・元に戻す（レストランボードと同じ）
     private var stayPopover: some View {
         VStack(spacing: 14) {
-            Text(NRWMath.stayLabel(stay)).font(.system(size: 30, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink)
+            Text(NRWMath.stayLabel(stay)).font(.system(size: 30, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.ink)
             HStack(spacing: 8) {
                 ForEach([-30, -5, 5, 30], id: \.self) { d in
                     Button {
                         let v = min(720, max(15, stay + d))
                         stayCustom = v == defaultStay ? nil : v
                     } label: {
-                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.navy)
+                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.navy)
                             .frame(width: 74, height: 48)
                             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NLColor.page))
                             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NLColor.line, lineWidth: 1.5))
@@ -716,7 +716,7 @@ struct NativeReservationEntry: View {
 
     private var partyKeypad: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Text("人数は何名様ですか？").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.navy)
+            Text("人数は何名様ですか？").font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.navy)
             HStack(alignment: .center, spacing: 10) {
                 Button { partyField = .min; partyFresh = true } label: { partyDisplay }
                     .buttonStyle(.plain)
@@ -745,16 +745,16 @@ struct NativeReservationEntry: View {
         VStack(alignment: .leading, spacing: 2) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
                 Text(partyMax.map { "\(partyMin)〜\($0)" } ?? (partyRangeOpen ? "\(partyMin)〜" : "\(partyMin)"))
-                    .font(.system(size: 44, weight: .heavy)).monospacedDigit()
+                    .font(.system(size: 44, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(partyField == .children ? NLColor.muted : NLColor.ink)
                     .lineLimit(1).minimumScaleFactor(0.5)
                 if partyRangeOpen {
-                    Text("？").font(.system(size: 30, weight: .heavy)).foregroundColor(NLColor.gray)
+                    Text("？").font(.system(size: 30, weight: NT.strong)).foregroundColor(NLColor.gray)
                 }
                 Text("人").font(.system(size: 20, weight: .bold)).foregroundColor(NLColor.muted)
             }
             if children > 0 || partyField == .children {
-                Text("うち子供 \(children)").font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                Text("うち子供 \(children)").font(.system(size: 15, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(partyField == .children ? NLColor.navy : NLColor.muted)
                     .padding(.horizontal, partyField == .children ? 8 : 0).padding(.vertical, 2)
                     .background(RoundedRectangle(cornerRadius: 6).fill(partyField == .children ? NLColor.yellow : Color.clear))
@@ -778,7 +778,7 @@ struct NativeReservationEntry: View {
         Button(action: action) {
             Group {
                 if k == "⌫" { Image(systemName: "delete.left").font(.system(size: 24, weight: .semibold)) }
-                else if k.count > 2 { Text(k).font(.system(size: 17, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7) }
+                else if k.count > 2 { Text(k).font(.system(size: 17, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7) }
                 else { Text(k).font(.system(size: 30, weight: .semibold)).monospacedDigit() }
             }
             .foregroundColor(on ? NLColor.navy : NLColor.ink)
@@ -831,7 +831,7 @@ struct NativeReservationEntry: View {
         let fitsLater = later == time ? [] : choicesAt(later).filter { $0.free && ($0.fit == .just || $0.fit == .ok) }
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("おすすめのテーブル").font(.system(size: 14, weight: .heavy)).foregroundColor(NLColor.navy)
+                Text("おすすめのテーブル").font(.system(size: 14, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("\(party)名・\(time)〜\(NRWMath.addMinutes(time, stay))").font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundColor(NLColor.muted)
                 if entryLoading { ProgressView().scaleEffect(0.7) }
                 Spacer()
@@ -840,7 +840,7 @@ struct NativeReservationEntry: View {
                 let seats = (entry?.tables ?? []).filter { tableIds.contains($0.id) }.reduce(0) { $0 + $1.capacityMax }
                 HStack(spacing: 8) {
                     Image(systemName: "checkmark.circle.fill").foregroundColor(NLColor.green)
-                    Text("\(tableSummary)・\(seats)名席").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink)
+                    Text("\(tableSummary)・\(seats)名席").font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink)
                     if seats < party { Text("（\(party - seats)名分たりません）").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.red) }
                     Spacer()
                     Button { tableIds = [] } label: { Text("はずす").font(.system(size: 13, weight: .bold)).foregroundColor(NLColor.blue) }.buttonStyle(.plain)
@@ -867,7 +867,7 @@ struct NativeReservationEntry: View {
                         HStack(spacing: 6) {
                             ForEach(fitsLater.prefix(8)) { c in
                                 Button { time = later; tableIds = [c.table.id] } label: {
-                                    Text(c.table.name).font(.system(size: 13, weight: .heavy)).foregroundColor(NLColor.navy)
+                                    Text(c.table.name).font(.system(size: 13, weight: NT.strong)).foregroundColor(NLColor.navy)
                                         .padding(.horizontal, 10).frame(height: 32)
                                         .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(NLColor.page))
                                         .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(NLColor.line, lineWidth: 1))
@@ -884,7 +884,7 @@ struct NativeReservationEntry: View {
                     Text("すべてのテーブルを見る（時間の表）")
                     Image(systemName: "chevron.right")
                 }
-                .font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.blue)
+                .font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.blue)
             }
             .buttonStyle(.plain)
             .disabled(entry == nil)
@@ -900,14 +900,14 @@ struct NativeReservationEntry: View {
         let on = tableIds.contains(c.table.id)
         return Button { toggle(c.table.id) } label: {
             VStack(spacing: 4) {
-                Text(c.table.name).font(.system(size: 18, weight: .heavy)).foregroundColor(on ? NLColor.navy : NLColor.ink).lineLimit(1)
+                Text(c.table.name).font(.system(size: 18, weight: NT.strong)).foregroundColor(on ? NLColor.navy : NLColor.ink).lineLimit(1)
                 HStack(spacing: 3) {
                     Image(systemName: "person.fill").font(.system(size: 10))
                     Text(c.table.capacityMin == c.table.capacityMax ? "\(c.table.capacityMax)" : "\(c.table.capacityMin)〜\(c.table.capacityMax)")
                 }
                 .font(.system(size: 12, weight: .bold)).monospacedDigit().foregroundColor(NLColor.muted)
                 if c.best {
-                    Text("ピッタリ").font(.system(size: 10, weight: .heavy)).foregroundColor(Color(hex: 0x05603A))
+                    Text("ピッタリ").font(.system(size: 10, weight: NT.strong)).foregroundColor(Color(hex: 0x05603A))
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(Capsule().fill(NLColor.greenSoft))
                 }
@@ -923,7 +923,7 @@ struct NativeReservationEntry: View {
         let on = Set(c.ids) == Set(tableIds)
         return Button { tableIds = c.ids } label: {
             VStack(spacing: 4) {
-                Text(c.tables.map(\.name).joined(separator: "+")).font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(c.tables.map(\.name).joined(separator: "+")).font(.system(size: 16, weight: NT.strong)).foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
                 Text("\(c.seats)名席\(c.adjacent ? "・となり" : "")").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.muted)
             }
             .frame(maxWidth: .infinity).frame(height: 70)
@@ -958,7 +958,7 @@ struct NativeReservationEntry: View {
                 let on = status == s
                 Button { status = s } label: {
                     VStack(spacing: 2) {
-                        Text(s.label).font(.system(size: 16, weight: .heavy))
+                        Text(s.label).font(.system(size: 16, weight: NT.strong))
                         Text(s.hint).font(.system(size: 11, weight: .semibold)).opacity(0.75)
                     }
                     .foregroundColor(on ? .white : NLColor.ink)
@@ -998,7 +998,7 @@ struct NativeReservationEntry: View {
                 let v = NPVisitSource(id: s.code, label: s.name)
                 let on = sourceCode == s.code
                 Button { sourceCode = s.code } label: {
-                    Text(s.name).font(.system(size: 14, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.6)
+                    Text(s.name).font(.system(size: 14, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.6)
                         .foregroundColor(on ? (v.darkText ? NLColor.ink : .white) : v.color)
                         .frame(maxWidth: .infinity).frame(height: 46)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? v.color : v.color.opacity(0.12)))
@@ -1022,7 +1022,7 @@ struct NativeReservationEntry: View {
                     HStack(spacing: 10) {
                         Image(systemName: "person.crop.circle.fill").font(.system(size: 22)).foregroundColor(NLColor.navy2)
                         VStack(alignment: .leading, spacing: 1) {
-                            Text("\(h.name) 様").font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink)
+                            Text("\(h.name) 様").font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink)
                             Text(h.phone ?? "").font(.system(size: 12, weight: .semibold)).monospacedDigit().foregroundColor(NLColor.muted)
                         }
                         Spacer()
@@ -1052,9 +1052,9 @@ struct NativeReservationEntry: View {
     private var footer: some View {
         HStack(spacing: 14) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(isConvert ? "予約へ変換" : "予約の登録").font(.system(size: 12, weight: .heavy)).foregroundColor(NLColor.muted)
+                Text(isConvert ? "予約へ変換" : "予約の登録").font(.system(size: 12, weight: NT.strong)).foregroundColor(NLColor.muted)
                 Text("\(partyLabel)・\(dateLabel(date))\(date == today ? "（今日）" : "")・\(time)〜\(NRWMath.addMinutes(time, stay))・\(tableSummary)\(name.isEmpty ? "" : "・\(name) 様")")
-                    .font(.system(size: 16, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                    .font(.system(size: 16, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.ink).lineLimit(1).minimumScaleFactor(0.7)
                 if let warn = staySelectionWarning ?? problem {
                     Text(warn).font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.red).lineLimit(2)
                 } else if step == .guest && !guestReady {
@@ -1090,7 +1090,7 @@ struct NativeReservationEntry: View {
                 Text(t)
                 if primary { Image(systemName: icon) }
             }
-            .font(.system(size: 17, weight: .heavy)).foregroundColor(NLColor.navy)
+            .font(.system(size: 17, weight: NT.strong)).foregroundColor(NLColor.navy)
             .padding(.horizontal, primary ? 34 : 26).frame(minWidth: primary ? 280 : 0).frame(height: 58)
             .background(RoundedRectangle(cornerRadius: 29, style: .continuous).fill(primary ? NLColor.yellow.opacity(enabled ? 1 : 0.4) : Color.white))
             .overlay(RoundedRectangle(cornerRadius: 29, style: .continuous).stroke(primary ? Color.clear : NLColor.navy.opacity(0.8), lineWidth: 1.5))
@@ -1122,7 +1122,7 @@ struct NativeReservationEntry: View {
     private var tablePicker: some View {
         VStack(spacing: 0) {
             HStack(spacing: 14) {
-                Text("テーブルを選ぶ").font(.system(size: 20, weight: .heavy)).foregroundColor(.white)
+                Text("テーブルを選ぶ").font(.system(size: 20, weight: NT.strong)).foregroundColor(.white)
                 Text("\(dateLabel(date)) \(time)〜\(NRWMath.addMinutes(time, stay))・\(partyLabel)").font(.system(size: 14, weight: .bold)).monospacedDigit().foregroundColor(NLColor.yellow)
                 Spacer()
                 Text("時間をずらす").font(.system(size: 12, weight: .bold)).foregroundColor(.white.opacity(0.7))
@@ -1131,14 +1131,14 @@ struct NativeReservationEntry: View {
                         time = NRWMath.addMinutes(time, d)
                         tableIds = tableIds.filter { id in choices.first { $0.table.id == id }?.free ?? false }
                     } label: {
-                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 13, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 13, weight: NT.strong)).monospacedDigit().foregroundColor(.white)
                             .padding(.horizontal, 10).frame(height: 36)
                             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white.opacity(0.14)))
                     }
                     .buttonStyle(PressableStyle())
                 }
                 Button { tablesOpen = false } label: {
-                    Text("決める").font(.system(size: 16, weight: .heavy)).foregroundColor(NLColor.navy)
+                    Text("決める").font(.system(size: 16, weight: NT.strong)).foregroundColor(NLColor.navy)
                         .padding(.horizontal, 22).frame(height: 42)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NLColor.yellow))
                 }
@@ -1150,7 +1150,7 @@ struct NativeReservationEntry: View {
             VStack(alignment: .leading, spacing: 10) {
                 HStack(spacing: 8) {
                     Image(systemName: tableIds.isEmpty ? "info.circle" : "checkmark.circle.fill").foregroundColor(tableIds.isEmpty ? NLColor.muted : NLColor.green)
-                    Text(tableIds.isEmpty ? "空いている卓の点線の枠を押すと選べます（いくつでも）" : tableSummary).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink)
+                    Text(tableIds.isEmpty ? "空いている卓の点線の枠を押すと選べます（いくつでも）" : tableSummary).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink)
                     Spacer()
                     legendItem(NLColor.yellow, "今回の予約")
                     legendItem(NLColor.green, "ピッタリ")
@@ -1217,7 +1217,7 @@ struct NativeReservationEntry: View {
     private func nameCell(_ title: String, sub: String, choice: NRWChoice?) -> some View {
         HStack(spacing: 8) {
             VStack(alignment: .leading, spacing: 2) {
-                Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NLColor.ink).lineLimit(1)
+                Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NLColor.ink).lineLimit(1)
                 Text(sub).font(.system(size: 11)).foregroundColor(NLColor.muted).lineLimit(1)
             }
             Spacer(minLength: 2)
@@ -1235,7 +1235,7 @@ struct NativeReservationEntry: View {
     }
 
     private func badge(_ t: String, fg: Color, bg: Color) -> some View {
-        Text(t).font(.system(size: 10, weight: .heavy)).foregroundColor(fg)
+        Text(t).font(.system(size: 10, weight: NT.strong)).foregroundColor(fg)
             .padding(.horizontal, 6).padding(.vertical, 3)
             .background(RoundedRectangle(cornerRadius: 5).fill(bg))
     }
@@ -1282,7 +1282,7 @@ struct NativeReservationEntry: View {
                                 Image(systemName: "plus.circle.fill")
                                 Text(c.best ? "ここに入れる（ピッタリ）" : c.fit == .small ? "ここに入れる（席が足りません）" : "ここに入れる")
                             }
-                            .font(.system(size: 12, weight: .heavy))
+                            .font(.system(size: 12, weight: NT.strong))
                             .foregroundColor(c.best ? Color(hex: 0x05603A) : NLColor.blue)
                             .padding(.leading, 10)
                         }
@@ -1300,7 +1300,7 @@ struct NativeReservationEntry: View {
     private func newBar(width: CGFloat, removable: Bool) -> some View {
         HStack(spacing: 8) {
             Image(systemName: "person.2.fill").font(.system(size: 12, weight: .bold))
-            Text("\(party)名 \(name.isEmpty ? "今回のご予約" : "\(name) 様")").font(.system(size: 13, weight: .heavy)).lineLimit(1)
+            Text("\(party)名 \(name.isEmpty ? "今回のご予約" : "\(name) 様")").font(.system(size: 13, weight: NT.strong)).lineLimit(1)
             Spacer(minLength: 0)
             if removable { Image(systemName: "xmark.circle.fill").font(.system(size: 15)).opacity(0.7) }
         }

@@ -67,7 +67,7 @@ struct NativeOwnerLoginView: View {
                     }
                     .padding(.top, 44).padding(.bottom, 26).padding(.horizontal, 20)
                     VStack(alignment: .leading, spacing: 14) {
-                        Text("ログイン").font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink)
+                        Text("ログイン").font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink)
                         input("ID（メールアドレス）", text: $model.email, secure: false, which: .email)
                         input("パスワード", text: $model.password, secure: true, which: .password)
                         if let e = model.error {
@@ -79,7 +79,7 @@ struct NativeOwnerLoginView: View {
                         Button { Task { await submit() } } label: {
                             HStack(spacing: 8) {
                                 if model.busy { ProgressView().tint(.white) }
-                                Text(model.busy ? "確認中…" : "ログイン").font(.system(size: 18, weight: .heavy))
+                                Text(model.busy ? "確認中…" : "ログイン").font(.system(size: 18, weight: NT.strong))
                             }
                             .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 56)
                             .background(RoundedRectangle(cornerRadius: 15, style: .continuous).fill(model.canSubmit || model.busy ? NT.purple : NT.ink3))

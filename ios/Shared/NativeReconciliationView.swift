@@ -408,7 +408,7 @@ struct NReconTile: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
             Text(label).font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1)
-            Text(text).font(.system(size: 24, weight: .heavy)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.6)
+            Text(text).font(.system(size: 24, weight: NT.strong)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.6)
         }
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)

@@ -149,7 +149,7 @@ struct NativePhoneSetupView: View {
         let inner = content()
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 6) {
-                Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 if !note.isEmpty { Text(note).font(.system(size: 12)).foregroundColor(NT.ink3) }
                 Spacer()
             }
@@ -183,7 +183,7 @@ struct NativePhoneSetupView: View {
                 Button { if value.wrappedValue > 0 { value.wrappedValue -= 1 } } label: {
                     Image(systemName: "minus").font(.system(size: 16, weight: .bold)).foregroundColor(NT.ink).frame(width: 44, height: 44)
                 }
-                Text("\(value.wrappedValue)").font(.system(size: 24, weight: .heavy)).foregroundColor(NT.ink).frame(minWidth: 44).monospacedDigit()
+                Text("\(value.wrappedValue)").font(.system(size: 24, weight: NT.strong)).foregroundColor(NT.ink).frame(minWidth: 44).monospacedDigit()
                 Button { if value.wrappedValue < 99 { value.wrappedValue += 1 } } label: {
                     Image(systemName: "plus").font(.system(size: 16, weight: .bold)).foregroundColor(NT.ink).frame(width: 44, height: 44)
                 }
@@ -215,7 +215,7 @@ struct NativePhoneSetupView: View {
                                 if let d = item.durationMinutes { Text("\(d)分").font(.system(size: 12)).foregroundColor(NT.ink3) }
                             }
                             Spacer()
-                            Text(NT.yen(Int(item.price))).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                            Text(NT.yen(Int(item.price))).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                         }
                         .padding(.horizontal, 12).frame(minHeight: 52)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NT.lilac : NT.page))
@@ -268,7 +268,7 @@ struct NativePhoneSetupView: View {
         } label: {
             HStack(spacing: 8) {
                 if model.busy { ProgressView().tint(.white) } else { Image(systemName: "checkmark.circle.fill").font(.system(size: 20, weight: .bold)) }
-                Text(problem ?? "\(model.guests)名で開始して注文へ").font(.system(size: 18, weight: .heavy))
+                Text(problem ?? "\(model.guests)名で開始して注文へ").font(.system(size: 18, weight: NT.strong))
             }
             .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 58)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(problem == nil ? NT.purple : NT.ink3))

@@ -179,7 +179,7 @@ struct NAccBankList: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: "building.columns").foregroundColor(NT.purple)
-                    Text(b.bankName).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                    Text(b.bankName).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 }
                 Text(NAccBankText.line(branch: b.branchName, typeLabel: b.accountTypeLabel, last4: b.accountLast4)).font(.system(size: 13)).foregroundColor(NT.ink2)
                 if let h = b.holderName, !h.isEmpty { Text("名義: \(h)").font(.system(size: 12)).foregroundColor(NT.ink3) }
@@ -895,7 +895,7 @@ struct NAccCsvImport: View {
                 HStack(alignment: .top, spacing: 10) {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 22)).foregroundColor(NFColor.success)
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("取込が完了しました").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                        Text("取込が完了しました").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                         Text("新規 \(s.newInserted)件 ・ 完全重複スキップ \(s.exactDuplicateSkipped)件 ・ 要確認 \(suspiciousTotal)件のうち取込 \(s.suspiciousInserted)件")
                             .font(.system(size: 13)).foregroundColor(NT.ink2)
                     }

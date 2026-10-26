@@ -96,7 +96,7 @@ struct NativeMenuPagesEditor: View {
 
     private var explain: some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text("ページ ＝ レジ・ハンディ・お客様QRの上のタブ").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text("ページ ＝ レジ・ハンディ・お客様QRの上のタブ").font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.navy)
             Text("名前は自由に変えられます。「ページを追加」でタブを足せます。↑↓で順番を変えられます。レジ（POS）はいちばん上のタブを最初に開きます。「おすすめ」（おすすめ・売れ筋）はレジだけのタブで、順番だけ変えられます。")
             Text("カテゴリが1つも入っていないタブは、レジ・ハンディ・お客様QRには出ません（押せないタブを出さないため）。")
             Text("下の「どのページに入れるか」を変えていないカテゴリは自動で振り分けます。保存するといまの並びで固定されます。")
@@ -113,10 +113,10 @@ struct NativeMenuPagesEditor: View {
 
     private var pagesSection: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("1. タブの並びと名前").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text("1. タブの並びと名前").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
             ForEach(Array(pages.enumerated()), id: \.element.key) { i, p in
                 HStack(spacing: 10) {
-                    Text(verbatim: "\(i + 1)").font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                    Text(verbatim: "\(i + 1)").font(.system(size: 14, weight: NT.strong)).monospacedDigit()
                         .foregroundColor(NT.purple).frame(width: 26)
                     if p.key == NMP.picksKey {
                         VStack(alignment: .leading, spacing: 1) {
@@ -169,7 +169,7 @@ struct NativeMenuPagesEditor: View {
 
     private func moveButton(_ icon: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 15, weight: .heavy))
+            Image(systemName: icon).font(.system(size: 15, weight: NT.strong))
                 .foregroundColor(disabled ? NFColor.ink3.opacity(0.4) : NFColor.navy)
                 .frame(width: 44, height: 44)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NFColor.line, lineWidth: 1))
@@ -182,7 +182,7 @@ struct NativeMenuPagesEditor: View {
 
     private func categoriesSection(_ cats: [NMPCategory]) -> some View {
         VStack(alignment: .leading, spacing: 6) {
-            Text("2. どのページに入れるか").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+            Text("2. どのページに入れるか").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
             ForEach(cats) { c in
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {

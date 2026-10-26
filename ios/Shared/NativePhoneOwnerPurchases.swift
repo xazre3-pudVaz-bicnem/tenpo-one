@@ -301,10 +301,10 @@ struct NativePhonePurchasesView: View {
         let st = NPZPoText.status(r.status)
         return VStack(alignment: .leading, spacing: 7) {
             HStack(spacing: 8) {
-                Text("#\(r.poNo)").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text("#\(r.poNo)").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 NOSBadge(text: st.0, color: st.1)
                 Spacer(minLength: 4)
-                Text(NPZ.yen(r.total)).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NPZ.yen(r.total)).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             Text(r.vendorName ?? "—").font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
             HStack(spacing: 10) {
@@ -461,7 +461,7 @@ struct NPZPoDetailView: View {
         let st = NPZPoText.status(po.status)
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(po.vendorName).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                Text(po.vendorName).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                 Spacer(minLength: 6)
                 NOSBadge(text: st.0, color: st.1)
             }
@@ -469,7 +469,7 @@ struct NPZPoDetailView: View {
             HStack(alignment: .firstTextBaseline) {
                 Text("合計（税込）").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                 Spacer()
-                Text(NPZ.yen(po.total)).font(.system(size: 30, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NPZ.yen(po.total)).font(.system(size: 30, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             }
             NPZInfoRow(label: "小計（税抜）", value: NPZ.yen(po.subtotal))
             NPZInfoRow(label: "消費税", value: NPZ.yen(po.taxTotal))
@@ -514,7 +514,7 @@ struct NPZPoDetailView: View {
                     HStack(alignment: .firstTextBaseline, spacing: 8) {
                         Text(i.name).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).lineLimit(2)
                         Spacer(minLength: 6)
-                        Text(NPZ.yen((i.quantity * i.unitCost).rounded())).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NPZ.yen((i.quantity * i.unitCost).rounded())).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                     HStack(spacing: 8) {
                         Text("\(NPZ.q(i.quantity))\(i.unit) × \(NPZ.yen(i.unitCost))（税抜・\(NPZ.q(i.taxRate))%）")
@@ -566,7 +566,7 @@ struct NPZPoOrderConfirmSheet: View {
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NT.dangerBg))
             }
             VStack(alignment: .leading, spacing: 6) {
-                Text("仕入先「\(po.vendorName)」への発注を確定します。").font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink)
+                Text("仕入先「\(po.vendorName)」への発注を確定します。").font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink)
                 Text("確定すると「発注済み」になり、入荷登録ができるようになります。このあと発注書（PDF）を送る画面を出します。")
                     .font(.system(size: 12.5)).foregroundColor(NT.ink2).fixedSize(horizontal: false, vertical: true)
             }
@@ -583,7 +583,7 @@ struct NPZPoOrderConfirmSheet: View {
                     HStack {
                         Text(i.name).font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                         Spacer()
-                        Text("\(NPZ.q(i.quantity))\(i.unit)").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink2).monospacedDigit()
+                        Text("\(NPZ.q(i.quantity))\(i.unit)").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink2).monospacedDigit()
                     }
                 }
             }

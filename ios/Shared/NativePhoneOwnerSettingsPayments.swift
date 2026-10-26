@@ -77,7 +77,7 @@ struct NPSPaymentsPage: View {
     private func chip(_ name: String, _ st: String, _ color: Color) -> some View {
         HStack(spacing: 5) {
             Circle().fill(color).frame(width: 8, height: 8)
-            Text(name).font(.system(size: 12.5, weight: .heavy)).foregroundColor(NT.ink)
+            Text(name).font(.system(size: 12.5, weight: NT.strong)).foregroundColor(NT.ink)
             Text(st).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink2)
         }
         .padding(.horizontal, 11).frame(height: 32)
@@ -158,7 +158,7 @@ struct NPSPaymentsPage: View {
                         model.methods[methodId] = catalog.filter { picked.contains($0.id) }.map { NPYBrand(key: $0.id, name: named[$0.id] ?? $0.name) } + custom
                     } label: {
                         HStack(spacing: 4) {
-                            if on { Image(systemName: "checkmark").font(.system(size: 11, weight: .heavy)) }
+                            if on { Image(systemName: "checkmark").font(.system(size: 11, weight: NT.strong)) }
                             Text(current.first { $0.key == b.id }?.name ?? b.name).font(.system(size: 13.5, weight: .bold)).lineLimit(1)
                         }
                         .foregroundColor(on ? .white : NT.ink2)
@@ -217,7 +217,7 @@ struct NPSPaymentsPage: View {
             VStack(alignment: .leading, spacing: 8) {
                 HStack(spacing: 8) {
                     Image(systemName: t.online ? "wifi" : "wifi.slash").font(.system(size: 15, weight: .bold)).foregroundColor(t.online ? NT.ok : NT.ink3)
-                    Text(t.name).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(t.name).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink)
                     if !t.active { NPSTag(text: "停止中") }
                     Spacer()
                 }
@@ -226,7 +226,7 @@ struct NPSPaymentsPage: View {
                     .font(.system(size: 11.5)).foregroundColor(NT.ink3)
                 HStack(spacing: 6) {
                     Image(systemName: "key").font(.system(size: 13, weight: .bold))
-                    Text(Self.linkCode(t.linkCode)).font(.system(size: 17, weight: .heavy, design: .monospaced)).tracking(1.5)
+                    Text(Self.linkCode(t.linkCode)).font(.system(size: 17, weight: NT.strong, design: .monospaced)).tracking(1.5)
                 }
                 .foregroundColor(NT.purpleDeep)
                 .padding(.horizontal, 10).padding(.vertical, 5)
@@ -271,7 +271,7 @@ struct NPSPaymentsPage: View {
                 Circle().fill(r.status == "online" ? NT.ok : (r.status == "offline" ? NT.ink3 : NT.warn)).frame(width: 9, height: 9)
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 5) {
-                        Text(r.label).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(r.label).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                         if r.isSimulated { NPSTag(text: "シミュレーション") }
                     }
                     Text("\(r.statusLabel)・\(r.deviceType ?? "種別不明")・最終接続 \(NPS.mdhm(r.lastSeenAt))").font(.system(size: 11.5)).foregroundColor(NT.ink3)

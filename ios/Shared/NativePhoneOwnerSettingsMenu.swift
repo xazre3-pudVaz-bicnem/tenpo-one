@@ -35,7 +35,7 @@ struct NPSSoldOutPage: View {
             ForEach(secs) { s in
                 VStack(alignment: .leading, spacing: 6) {
                     HStack(spacing: 6) {
-                        Text(s.name).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(s.name).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                         let n = s.items.filter(\.isSoldOut).count
                         if n > 0 { NOSBadge(text: "売切 \(n)", color: NT.danger) }
                     }
@@ -65,7 +65,7 @@ struct NPSSoldOutPage: View {
                 if busy {
                     ProgressView().frame(width: 66)
                 } else {
-                    Text(it.isSoldOut ? "売切" : "販売中").font(.system(size: 13, weight: .heavy)).foregroundColor(it.isSoldOut ? .white : NT.ok)
+                    Text(it.isSoldOut ? "売切" : "販売中").font(.system(size: 13, weight: NT.strong)).foregroundColor(it.isSoldOut ? .white : NT.ok)
                         .frame(width: 66, height: 32)
                         .background(Capsule().fill(it.isSoldOut ? NT.danger : NT.ok.opacity(0.12)))
                 }
@@ -125,7 +125,7 @@ struct NPSMenuItemsPage: View {
         }
         ForEach(Array(secs.enumerated()), id: \.offset) { _, sec in
             VStack(alignment: .leading, spacing: 6) {
-                Text(sec.0?.name ?? "カテゴリなし").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).padding(.leading, 4)
+                Text(sec.0?.name ?? "カテゴリなし").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).padding(.leading, 4)
                 VStack(spacing: 0) {
                     ForEach(Array(sec.1.enumerated()), id: \.element.id) { i, it in
                         row(it, p)
@@ -145,7 +145,7 @@ struct NPSMenuItemsPage: View {
                     Text(it.name).font(.system(size: 15, weight: .bold)).foregroundColor(hidden ? NT.ink3 : NT.ink).lineLimit(2)
                         .strikethrough(hidden, color: NT.ink3).multilineTextAlignment(.leading)
                     HStack(spacing: 4) {
-                        Text(NT.yen(Int(it.price))).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                        Text(NT.yen(Int(it.price))).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                         if let t = it.takeoutPrice { Text("TO \(NT.yen(Int(t)))").font(.system(size: 11)).foregroundColor(NT.ink3).monospacedDigit() }
                         if it.shared { NPSTag(text: "全店共通") }
                         if hidden { NPSTag(text: "非表示") }
@@ -170,7 +170,7 @@ struct NPSMenuItemsPage: View {
                 ProgressView().frame(width: 60)
             } else {
                 Button { Task { await model.toggleSoldOut(it) } } label: {
-                    Text(it.isSoldOut ? "売切" : "販売中").font(.system(size: 12, weight: .heavy)).foregroundColor(it.isSoldOut ? .white : NT.ok)
+                    Text(it.isSoldOut ? "売切" : "販売中").font(.system(size: 12, weight: NT.strong)).foregroundColor(it.isSoldOut ? .white : NT.ok)
                         .frame(width: 60, height: 30)
                         .background(Capsule().fill(it.isSoldOut ? NT.danger : NT.ok.opacity(0.12)))
                 }
@@ -325,7 +325,7 @@ struct NPSCategoriesPage: View {
                 RoundedRectangle(cornerRadius: 7, style: .continuous).fill(Self.color(r.color)).frame(width: 26, height: 26)
                 VStack(alignment: .leading, spacing: 2) {
                     HStack(spacing: 5) {
-                        Text(r.name).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(r.name).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink)
                         if r.shared { NPSTag(text: "全店共通") }
                     }
                     Text("\(r.nameEn.isEmpty ? "" : r.nameEn + "・")並び \(r.sortOrder)").font(.system(size: 11.5)).foregroundColor(NT.ink3)
@@ -422,7 +422,7 @@ struct NPSOptionsPage: View {
     private func group(_ g: NOGGroup, idx: Int, _ p: NOGPayload) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(g.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                Text(g.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                 NPSTag(text: g.isRequired ? "必須・\(g.minSelect)〜\(g.maxSelect)" : "任意・最大\(g.maxSelect)", color: g.isRequired ? NT.danger : NT.ink3)
                 Spacer(minLength: 4)
                 if p.canEdit {
@@ -472,7 +472,7 @@ struct NPSOptionsPage: View {
                                 if model.busy == "add:\(g.id)" { ProgressView().tint(.white) } else { Image(systemName: "plus") }
                                 Text("追加")
                             }
-                            .font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                            .font(.system(size: 14, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 16).frame(height: 44)
                             .background(Capsule().fill(NT.purple))
                         }
@@ -544,7 +544,7 @@ struct NPSQrServicePage: View {
                 ForEach(model.rows.indices, id: \.self) { i in
                     VStack(spacing: 8) {
                         HStack(spacing: 8) {
-                            Text("\(i + 1)").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink3).frame(width: 20)
+                            Text("\(i + 1)").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink3).frame(width: 20)
                             TextField("お水", text: Binding(get: { i < model.rows.count ? model.rows[i].name : "" }, set: { if i < model.rows.count { model.rows[i].name = $0 } }))
                                 .font(.system(size: 15)).disabled(!edit).npocInputBox()
                         }

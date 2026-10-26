@@ -209,7 +209,7 @@ struct NativeSlipOpsSheet: View {
                 ForEach(tables) { t in
                     Button { onPick(t) } label: {
                         VStack(spacing: 4) {
-                            Text(t.name).font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
+                            Text(t.name).font(.system(size: 18, weight: NT.strong)).foregroundColor(NFColor.navy)
                             if let o = t.order {
                                 Text("\(o.guestCount)名・\(NT.yen(o.total))").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
                             } else {
@@ -230,7 +230,7 @@ struct NativeSlipOpsSheet: View {
     private func bigButton(_ ja: String, en: String, fill: Color, enabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 1) {
-                Text(ja).font(.system(size: 17, weight: .heavy))
+                Text(ja).font(.system(size: 17, weight: NT.strong))
                 Text(en).font(.system(size: 11, weight: .bold)).opacity(0.8)
             }
             .foregroundColor(.white)

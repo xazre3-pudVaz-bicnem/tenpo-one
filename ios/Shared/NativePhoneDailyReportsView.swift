@@ -320,7 +320,7 @@ struct NativePhoneDailyReportsView: View {
         return VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(row.storeName).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(row.storeName).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                     HStack(spacing: 5) {
                         Image(systemName: row.closed ? "checkmark.circle.fill" : "circle.dashed").font(.system(size: 12, weight: .bold))
                         Text(row.closed ? "レジ締め済み" : "レジ締め未実施（当日集計のみで生成できます）")
@@ -469,7 +469,7 @@ struct NPODrDetailView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .top, spacing: 8) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(r.storeName).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(r.storeName).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink)
                     Text(NPOCFmt.fullDayWeek(r.businessDate)).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink2)
                 }
                 Spacer(minLength: 6)
@@ -523,13 +523,13 @@ struct NPODrDetailView: View {
         HStack(alignment: .bottom, spacing: 12) {
             VStack(alignment: .leading, spacing: 3) {
                 Text("総売上").font(.system(size: 12, weight: .semibold)).foregroundColor(.white.opacity(0.75))
-                Text(NWKFmt.yen(m.grossSales)).font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                Text(NWKFmt.yen(m.grossSales)).font(.system(size: 28, weight: NT.strong)).monospacedDigit().foregroundColor(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
             }
             Spacer(minLength: 8)
             VStack(alignment: .trailing, spacing: 3) {
                 Text("客数").font(.system(size: 12, weight: .semibold)).foregroundColor(.white.opacity(0.75))
-                Text(NPODrText.count(m.guests, "名")).font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(.white)
+                Text(NPODrText.count(m.guests, "名")).font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(.white)
             }
         }
         .padding(16)

@@ -521,7 +521,7 @@ struct NPRCard<Trailing: View, Content: View>: View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 10) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                     if let note { Text(note).font(.system(size: 12.5)).foregroundColor(NT.ink3).fixedSize(horizontal: false, vertical: true) }
                 }
                 Spacer(minLength: 8)
@@ -772,7 +772,7 @@ struct NPRListScreen: View {
                                 Text("\(r.storeName) ・ \(r.payTypeLabel) ・ 適用 \(r.effectiveFromLabel)〜").font(.system(size: 13)).foregroundColor(NT.ink3)
                             }
                             Spacer(minLength: 8)
-                            Text(NPRFmt.yen(r.baseAmount)).font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                            Text(NPRFmt.yen(r.baseAmount)).font(.system(size: 17, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                             NPRButton(text: "編集") { ruleEdit = NPREditRule(rule: r) }
                         }
                         .padding(.horizontal, 18).padding(.vertical, 12)
@@ -871,7 +871,7 @@ struct NPRListScreen: View {
                 Text(r.periodLabel).font(.system(size: 13)).foregroundColor(NT.ink3)
             }
             Spacer(minLength: 8)
-            Text(NPRFmt.yen(r.grossTotal)).font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+            Text(NPRFmt.yen(r.grossTotal)).font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
             Text("明細を見る").font(.system(size: 14, weight: .bold)).foregroundColor(NT.purple)
             Image(systemName: "chevron.right").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
         }
@@ -1162,7 +1162,7 @@ struct NPRCommissionSheet: View {
                     HStack {
                         Text("支給額")
                         Spacer()
-                        Text(NPRFmt.yen(previewAmount)).font(.system(size: 17, weight: .heavy)).monospacedDigit()
+                        Text(NPRFmt.yen(previewAmount)).font(.system(size: 17, weight: NT.strong)).monospacedDigit()
                     }
                 }
                 if let error {
@@ -1394,7 +1394,7 @@ struct NPRRunCreateSheet: View {
             }
             HStack {
                 Spacer()
-                Text("合計 \(NPRFmt.yen(bonusTotal))").font(.system(size: 16, weight: .heavy)).monospacedDigit()
+                Text("合計 \(NPRFmt.yen(bonusTotal))").font(.system(size: 16, weight: NT.strong)).monospacedDigit()
             }
         } header: {
             Text("対象スタッフ・支給額")
@@ -1574,7 +1574,7 @@ struct NPRRunScreen: View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top, spacing: 10) {
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(run.title).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(run.title).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink)
                     Text(run.description).font(.system(size: 14)).foregroundColor(NT.ink2)
                 }
                 Spacer(minLength: 8)
@@ -1635,15 +1635,15 @@ struct NPRRunScreen: View {
                         HStack {
                             Text(i.profileName).font(.system(size: 16, weight: .bold)).foregroundColor(NT.ink)
                             Spacer()
-                            Text(NPRFmt.yen(i.amount)).font(.system(size: 17, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                            Text(NPRFmt.yen(i.amount)).font(.system(size: 17, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                         }
                         .padding(.horizontal, 18).padding(.vertical, 12)
                         NPRDivider()
                     }
                     HStack {
-                        Text("合計").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                        Text("合計").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                         Spacer()
-                        Text(NPRFmt.yen(total)).font(.system(size: 18, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                        Text(NPRFmt.yen(total)).font(.system(size: 18, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                     }
                     .padding(.horizontal, 18).padding(.vertical, 14)
                     .background(NT.page)
@@ -1698,10 +1698,10 @@ private struct NPRTotalsCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("合計（\(count)人）").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                Text("合計（\(count)人）").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 Text("総支給").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                Text(NPRFmt.yen(t.grossTotal)).font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                Text(NPRFmt.yen(t.grossTotal)).font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
             }
             NPRChips(pairs: [
                 ("勤務", "\(Int(t.workDays))日"), ("実働", NPRFmt.minutes(t.workMinutes)), ("残業", NPRFmt.minutes(t.overtimeMinutes)),
@@ -1732,10 +1732,10 @@ private struct NPRItemCard: View {
                     HStack(spacing: 10) {
                         Image(systemName: open ? "chevron.down" : "chevron.right")
                             .font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3).frame(width: 16)
-                        Text(item.profileName).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(item.profileName).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                         Spacer()
                         Text("総支給").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                        Text(NPRFmt.yen(item.grossTotal)).font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink)
+                        Text(NPRFmt.yen(item.grossTotal)).font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink)
                     }
                     NPRChips(pairs: [
                         ("勤務", "\(Int(item.workDays))日"), ("実働", NPRFmt.minutes(item.workMinutes)), ("残業", NPRFmt.minutes(item.overtimeMinutes)),
@@ -1810,7 +1810,7 @@ private struct NPRLineView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(line.text)
-                .font(.system(size: 14, weight: line.strong == true ? Font.Weight.heavy : Font.Weight.regular))
+                .font(.system(size: 14, weight: line.strong == true ? NT.strong : Font.Weight.regular))
                 .foregroundColor(line.strong == true ? NT.ink : NT.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(Array((line.sub ?? []).enumerated()), id: \.offset) { _, s in
@@ -1829,7 +1829,7 @@ private struct NPRSnapshotPanel: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("この計算で使ったルール（確定時点で固定）").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                Text("この計算で使ったルール（確定時点で固定）").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 if let g = s.generatedLabel { Text(g).font(.system(size: 12)).foregroundColor(NT.ink3) }
             }
@@ -1893,7 +1893,7 @@ struct NPRPayslipView: View {
     private var head: some View {
         HStack(alignment: .top) {
             VStack(alignment: .leading, spacing: 4) {
-                Text(p.runType == "bonus" ? "賞与明細書" : "給与明細書").font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink)
+                Text(p.runType == "bonus" ? "賞与明細書" : "給与明細書").font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink)
                 Text(p.runTitle).font(.system(size: 12)).foregroundColor(NT.ink3)
                 Text(p.periodLabel).font(.system(size: 12)).foregroundColor(NT.ink3)
             }
@@ -1925,9 +1925,9 @@ struct NPRPayslipView: View {
                     row("歩合給", p.commissionTotal)
                     Rectangle().fill(NT.line).frame(height: 2)
                     HStack {
-                        Text("支給合計").font(.system(size: 14, weight: .heavy))
+                        Text("支給合計").font(.system(size: 14, weight: NT.strong))
                         Spacer()
-                        Text(NPRFmt.yen(p.grossTotal)).font(.system(size: 14, weight: .heavy)).monospacedDigit()
+                        Text(NPRFmt.yen(p.grossTotal)).font(.system(size: 14, weight: NT.strong)).monospacedDigit()
                     }
                     .foregroundColor(NT.ink).padding(.vertical, 8)
                 }
@@ -1974,7 +1974,7 @@ struct NPRPayslipView: View {
         HStack {
             Text(label).font(.system(size: 14, weight: .semibold))
             Spacer()
-            Text(NPRFmt.yen(value)).font(.system(size: 26, weight: .heavy)).monospacedDigit()
+            Text(NPRFmt.yen(value)).font(.system(size: 26, weight: NT.strong)).monospacedDigit()
         }
         .foregroundColor(.white)
         .padding(16)
@@ -2152,7 +2152,7 @@ struct NPRNenchoScreen: View {
     // MARK: 自分の申告
 
     @ViewBuilder private func ownSection(_ p: NPRNenchoPayload) -> some View {
-        Text("自分の申告").font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).padding(.top, 4)
+        Text("自分の申告").font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).padding(.top, 4)
         HStack(spacing: 10) {
             Text(verbatim: "\(p.year)年分の申告").font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink2)
             NPBadge(text: NPRFmt.nenchoStatus[p.own.status] ?? p.own.status, color: NPRFmt.nenchoColor(p.own.status))
@@ -2301,7 +2301,7 @@ struct NPRNenchoScreen: View {
 
     @ViewBuilder private func adminSection(_ p: NPRNenchoPayload) -> some View {
         HStack {
-            Text("提出状況の確認（管理）").font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink)
+            Text("提出状況の確認（管理）").font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink)
             Spacer()
             statusFilter(p)
         }

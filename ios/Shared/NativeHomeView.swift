@@ -334,7 +334,7 @@ struct NativeHomeView: View {
     private var sidebar: some View {
         VStack(spacing: 10) {
             VStack(spacing: 6) {
-                Text("TENPO ONE").font(.system(size: 17, weight: .heavy)).foregroundColor(Self.sideActive).lineLimit(1).minimumScaleFactor(0.8)
+                Text("TENPO ONE").font(.system(size: 17, weight: NT.strong)).foregroundColor(Self.sideActive).lineLimit(1).minimumScaleFactor(0.8)
                 Text("POS × RESERVE").font(.system(size: 9, weight: .semibold)).tracking(1.0).foregroundColor(Self.sideSub).lineLimit(1).minimumScaleFactor(0.8)
             }
             // 上は時計・電波の行の下から
@@ -373,7 +373,7 @@ struct NativeHomeView: View {
             .background(RoundedRectangle(cornerRadius: 18, style: .continuous).fill(n.active ? Self.sideActive : Self.sideItem))
             .overlay(alignment: .topTrailing) {
                 if let b = n.badge, b > 0 {
-                    Text("\(b)").font(.system(size: 12, weight: .heavy)).foregroundColor(.white)
+                    Text("\(b)").font(.system(size: 12, weight: NT.strong)).foregroundColor(.white)
                         .frame(minWidth: 22).padding(.horizontal, 5).frame(height: 22)
                         .background(Capsule().fill(Color(hex: 0xE53935)))
                         .offset(x: 4, y: -4)
@@ -458,12 +458,12 @@ struct NativeHomeView: View {
                     .overlay(RoundedRectangle(cornerRadius: 18, style: .continuous).stroke(Self.tileLine, lineWidth: 1))
                     .overlay(alignment: .topTrailing) {
                         if let b = g.badge, b > 0 {
-                            Text("\(b)").font(.system(size: 13, weight: .heavy)).foregroundColor(.white)
+                            Text("\(b)").font(.system(size: 13, weight: NT.strong)).foregroundColor(.white)
                                 .frame(minWidth: 26).padding(.horizontal, 6).frame(height: 26)
                                 .background(Capsule().fill(Color(hex: 0xE53935)))
                                 .padding(8)
                         } else if g.alert {
-                            Text("!").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                            Text("!").font(.system(size: 14, weight: NT.strong)).foregroundColor(.white)
                                 .frame(width: 24, height: 24)
                                 .background(Circle().fill(NFColor.danger))
                                 .overlay(Circle().stroke(Color.white, lineWidth: 2))

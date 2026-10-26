@@ -356,7 +356,7 @@ struct NativePhoneOwnerRegisterView: View {
                         Text("過不足").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink2)
                         Spacer()
                         Text(!model.entered || diff == nil ? "—" : diff == 0 ? "±¥0（合っています）" : NOM.signed(Double(diff ?? 0)))
-                            .font(.system(size: 17, weight: .heavy)).monospacedDigit()
+                            .font(.system(size: 17, weight: NT.strong)).monospacedDigit()
                             .foregroundColor(!model.entered ? NT.ink3 : diff == 0 ? NT.ok : NT.danger)
                     }
                 }
@@ -406,7 +406,7 @@ struct NativePhoneOwnerRegisterView: View {
                 Spacer()
                 Text(s.registerName).font(.system(size: 11.5, weight: .bold)).foregroundColor(.white.opacity(0.8)).lineLimit(1)
             }
-            Text(NOS.yen(s.theoreticalCash)).font(.system(size: 32, weight: .heavy)).foregroundColor(.white).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
+            Text(NOS.yen(s.theoreticalCash)).font(.system(size: 32, weight: NT.strong)).foregroundColor(.white).monospacedDigit().lineLimit(1).minimumScaleFactor(0.5)
             Text("釣銭準備金 ＋ 現金売上 ＋ 入金 − 出金 − 現金返金").font(.system(size: 11)).foregroundColor(.white.opacity(0.8))
             Text("\(NOS.yen(s.openingFloat)) ＋ \(NOS.yen(s.cashSales)) ＋ \(NOS.yen(s.cashIn)) − \(NOS.yen(s.cashOut))\(s.cashRefunds > 0 ? " − \(NOS.yen(s.cashRefunds))" : "")")
                 .font(.system(size: 11)).foregroundColor(.white.opacity(0.8)).monospacedDigit().lineLimit(2).minimumScaleFactor(0.8)
@@ -438,10 +438,10 @@ struct NativePhoneOwnerRegisterView: View {
         let shortage = max(0, target - model.total)
         return VStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
-                Text("差額").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("差額").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 Text(diff.map { NOM.signed(Double($0)) } ?? "—")
-                    .font(.system(size: 26, weight: .heavy)).monospacedDigit()
+                    .font(.system(size: 26, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(diff == nil ? NT.ink3 : diff == 0 ? NT.ok : NT.danger)
             }
             Rectangle().fill(NT.line).frame(height: 1)
@@ -489,7 +489,7 @@ struct NativePhoneOwnerRegisterView: View {
             .foregroundColor(NT.danger)
             if let link {
                 Button(action: action) {
-                    Text("\(link) ›").font(.system(size: 12.5, weight: .heavy)).foregroundColor(NT.purpleDeep)
+                    Text("\(link) ›").font(.system(size: 12.5, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                 }
                 .buttonStyle(.plain)
                 .padding(.leading, 19)
@@ -541,9 +541,9 @@ struct NativePhoneOwnerRegisterView: View {
                 denomRow(d).id("denom-\(d)")
             }
             HStack(alignment: .firstTextBaseline) {
-                Text("合計").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("合計").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
-                Text(NT.yen(model.total)).font(.system(size: 26, weight: .heavy)).foregroundColor(model.entered ? NT.purpleDeep : NT.ink3).monospacedDigit()
+                Text(NT.yen(model.total)).font(.system(size: 26, weight: NT.strong)).foregroundColor(model.entered ? NT.purpleDeep : NT.ink3).monospacedDigit()
             }
             .padding(.horizontal, 14).frame(height: 56)
             .background(NT.lilac)
@@ -559,7 +559,7 @@ struct NativePhoneOwnerRegisterView: View {
             HStack(spacing: 10) {
                 Text(NOM.denomLabel(d)).font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink).frame(width: 84, alignment: .leading)
                 HStack(spacing: 2) {
-                    Text(n.map(String.init) ?? "0").font(.system(size: 19, weight: .heavy)).monospacedDigit()
+                    Text(n.map(String.init) ?? "0").font(.system(size: 19, weight: NT.strong)).monospacedDigit()
                         .foregroundColor(n == nil ? NT.ink3 : NT.ink)
                     Text("枚").font(.system(size: 11)).foregroundColor(NT.ink3)
                 }
@@ -583,7 +583,7 @@ struct NativePhoneOwnerRegisterView: View {
         let keys = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "C", "0", "⌫"]
         return VStack(spacing: 8) {
             HStack {
-                Text(model.focus.map { "\(NOM.denomLabel($0)) の枚数" } ?? "").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                Text(model.focus.map { "\(NOM.denomLabel($0)) の枚数" } ?? "").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 Button { model.focus = nil } label: {
                     Text("閉じる").font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink2)
@@ -606,7 +606,7 @@ struct NativePhoneOwnerRegisterView: View {
                 }
             }
             Button { model.next() } label: {
-                Text(model.focus == NOM.denoms.last ? "完了" : "次へ / Next").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                Text(model.focus == NOM.denoms.last ? "完了" : "次へ / Next").font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 48)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.purple))
             }
@@ -627,7 +627,7 @@ struct NativePhoneOwnerRegisterView: View {
             HStack {
                 NOMTitle(ja: p.continuing ? "\(NOS.md(p.businessDate)) の営業日の売上" : "本日の売上・入出金", en: "Today")
                 Spacer()
-                Text(NOS.yen(p.sales.grossSales)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NOS.yen(p.sales.grossSales)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 Image(systemName: summaryOpen ? "chevron.up" : "chevron.down").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
             }
             .padding(14)
@@ -664,14 +664,14 @@ struct NativePhoneOwnerRegisterView: View {
                     Text(m.label).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink)
                     Spacer()
                     Text("\(NOS.int(m.count))件").font(.system(size: 12)).foregroundColor(NT.ink3)
-                    Text(NOS.yen(m.amount)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().frame(minWidth: 90, alignment: .trailing)
+                    Text(NOS.yen(m.amount)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().frame(minWidth: 90, alignment: .trailing)
                 }
             }
             Rectangle().fill(NT.line).frame(height: 1)
             HStack {
-                Text("合計").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                Text("合計").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
-                Text(NOS.yen(p.paymentsTotal)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NOS.yen(p.paymentsTotal)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             }
         }
     }
@@ -686,9 +686,9 @@ struct NativePhoneOwnerRegisterView: View {
             if c.refunds > 0 { kv("現金返金", "−\(NOS.yen(c.refunds))") }
             Rectangle().fill(NT.line).frame(height: 1)
             HStack {
-                Text("現金残り").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                Text("現金残り").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
-                Text(NOS.yen(c.remaining)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NOS.yen(c.remaining)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             }
             if !p.registerMoves.isEmpty {
                 ForEach(p.registerMoves) { m in
@@ -744,7 +744,7 @@ struct NativePhoneOwnerRegisterView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .top) {
                 VStack(alignment: .leading, spacing: 3) {
-                    Text(c.registerName).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(c.registerName).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                     Text(closedLine(c)).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(2)
                 }
                 Spacer()
@@ -780,7 +780,7 @@ struct NativePhoneOwnerRegisterView: View {
             VStack(spacing: 14) {
                 VStack(spacing: 10) {
                     Image(systemName: "checkmark.circle.fill").font(.system(size: 54, weight: .bold)).foregroundColor(NT.ok)
-                    Text(d.opened ? "\(d.registerName)を開局しました" : "\(d.registerName)をクローズしました").font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(d.opened ? "\(d.registerName)を開局しました" : "\(d.registerName)をクローズしました").font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink)
                         .multilineTextAlignment(.center)
                     Text(d.opened ? "釣銭準備金 \(NT.yen(d.amount))" : "実査額 \(NT.yen(d.amount))（差額 \(NOM.signed(Double(d.difference)))）")
                         .font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink2).monospacedDigit()
@@ -820,7 +820,7 @@ struct NativePhoneOwnerRegisterView: View {
         HStack {
             Text(label).font(.system(size: 13.5, weight: .semibold)).foregroundColor(color == NT.danger ? NT.danger : NT.ink2).lineLimit(2)
             Spacer(minLength: 6)
-            Text(value).font(.system(size: 15, weight: .heavy)).foregroundColor(color).monospacedDigit()
+            Text(value).font(.system(size: 15, weight: NT.strong)).foregroundColor(color).monospacedDigit()
         }
     }
 
@@ -843,7 +843,7 @@ struct NativePhoneOwnerRegisterView: View {
                     Image(systemName: "person.crop.circle.fill").font(.system(size: 22)).foregroundColor(model.clerk == nil ? NT.ink3 : NT.purple)
                     VStack(alignment: .leading, spacing: 1) {
                         Text(open ? "レジ開局の担当者" : "レジクローズの担当者").font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.ink3)
-                        Text(model.clerk?.name ?? "担当者を選んでください").font(.system(size: 15.5, weight: .heavy)).foregroundColor(model.clerk == nil ? NT.danger : NT.ink)
+                        Text(model.clerk?.name ?? "担当者を選んでください").font(.system(size: 15.5, weight: NT.strong)).foregroundColor(model.clerk == nil ? NT.danger : NT.ink)
                     }
                     Spacer()
                     Text(model.clerk == nil ? "選ぶ" : "変更").font(.system(size: 13, weight: .bold)).foregroundColor(NT.purpleDeep)

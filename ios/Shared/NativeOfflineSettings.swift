@@ -16,7 +16,7 @@ struct NativeOfflinePrintCard: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 12) {
-                Text("ネットが無いときの印刷").font(.system(size: 18, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("ネットが無いときの印刷").font(.system(size: 18, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer(minLength: 0)
             }
             .padding(.horizontal, 20).padding(.vertical, 12)
@@ -49,7 +49,7 @@ struct NativeOfflinePrintCard: View {
             // まだサーバーへ送っていないオフラインの伝票
             if store.pendingCount > 0 {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("サーバーへ送っていない伝票 \(store.pendingCount)件").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.ink)
+                    Text("サーバーへ送っていない伝票 \(store.pendingCount)件").font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.ink)
                     ForEach(store.orders) { o in
                         HStack(spacing: 6) {
                             Image(systemName: o.syncError == nil ? "clock" : "exclamationmark.triangle.fill")
@@ -74,7 +74,7 @@ struct NativeOfflinePrintCard: View {
             }
             if !store.notes.isEmpty {
                 VStack(alignment: .leading, spacing: 6) {
-                    Text("送れたけれど確かめてほしいこと").font(.system(size: 14, weight: .heavy)).foregroundColor(NFColor.ink)
+                    Text("送れたけれど確かめてほしいこと").font(.system(size: 14, weight: NT.strong)).foregroundColor(NFColor.ink)
                     ForEach(Array(store.notes.enumerated()), id: \.offset) { _, n in
                         Text(n).font(.system(size: 13, weight: .semibold)).foregroundColor(NFColor.saffron).fixedSize(horizontal: false, vertical: true)
                     }

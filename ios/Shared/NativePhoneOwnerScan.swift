@@ -251,7 +251,7 @@ struct NativePhoneOwnerScanView: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 6) {
                 Image(systemName: "paperclip").font(.system(size: 13, weight: .bold)).foregroundColor(NT.purple)
-                Text("この出金のレシートを撮影").font(.system(size: 12.5, weight: .heavy)).foregroundColor(NT.purpleDeep)
+                Text("この出金のレシートを撮影").font(.system(size: 12.5, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                 Spacer()
                 Button { model.setTx(nil) } label: {
                     Image(systemName: "xmark.circle.fill").font(.system(size: 22)).foregroundColor(NT.ink3)
@@ -261,12 +261,12 @@ struct NativePhoneOwnerScanView: View {
             }
             HStack(alignment: .firstTextBaseline) {
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(t.main).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                    Text(t.main).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                     if let s = t.sub, !s.isEmpty { Text(s).font(.system(size: 12)).foregroundColor(NT.ink3).lineLimit(2) }
                     Text("\(NOS.mdw(t.date)) \(NOM.hm(t.occurredAt)) ・ \(t.kindLabel)").font(.system(size: 11.5)).foregroundColor(NT.ink3).monospacedDigit()
                 }
                 Spacer(minLength: 6)
-                Text(NOS.yen(t.amount)).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NOS.yen(t.amount)).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             NOSBadge(text: t.hasReceipt ? "✓ レシート登録済み（撮り直すと差し替え）" : "レシート未添付", color: t.hasReceipt ? NT.ok : NT.warn)
             if !p.canLink {
@@ -286,7 +286,7 @@ struct NativePhoneOwnerScanView: View {
                 HStack(spacing: 10) {
                     Image(systemName: "camera.fill").font(.system(size: 22, weight: .bold))
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("撮影する").font(.system(size: 19, weight: .heavy))
+                        Text("撮影する").font(.system(size: 19, weight: NT.strong))
                         Text("Take a photo").font(.system(size: 10.5, weight: .semibold)).opacity(0.8)
                     }
                 }
@@ -300,7 +300,7 @@ struct NativePhoneOwnerScanView: View {
             PhotosPicker(selection: $picks, maxSelectionCount: p.target != nil ? 1 : 20, matching: .images) {
                 HStack(spacing: 8) {
                     Image(systemName: "photo.on.rectangle").font(.system(size: 16, weight: .bold))
-                    Text("写真から選ぶ").font(.system(size: 15.5, weight: .heavy))
+                    Text("写真から選ぶ").font(.system(size: 15.5, weight: NT.strong))
                 }
                 .foregroundColor(NT.purpleDeep)
                 .frame(maxWidth: .infinity).frame(height: 50)
@@ -354,13 +354,13 @@ struct NativePhoneOwnerScanView: View {
                 HStack(spacing: 10) {
                     VStack(alignment: .leading, spacing: 2) {
                         HStack(spacing: 6) {
-                            Text(NOM.hm(r.occurredAt)).font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink3).monospacedDigit()
+                            Text(NOM.hm(r.occurredAt)).font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink3).monospacedDigit()
                             Text(r.main).font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                         }
                         if let s = r.sub, !s.isEmpty { Text(s).font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1) }
                     }
                     Spacer(minLength: 4)
-                    Text(NOS.yen(r.amount)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NOS.yen(r.amount)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     if active {
                         NOSBadge(text: "撮影中", color: NT.purple)
                     } else if r.isAdvance {
@@ -428,7 +428,7 @@ struct NativePhoneOwnerScanView: View {
         } label: {
             HStack(spacing: 8) {
                 Image(systemName: "folder.fill").font(.system(size: 14)).foregroundColor(NT.purple)
-                Text(NOS.mdw(f.day)).font(.system(size: 13.5, weight: .heavy)).foregroundColor(NT.ink)
+                Text(NOS.mdw(f.day)).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(NT.ink)
                 if f.day == p.today { NOSBadge(text: "今日", color: NT.purple) }
                 Text("\(f.docs.count)件").font(.system(size: 12)).foregroundColor(NT.ink3)
                 if inbox > 0 { Text("未仕分け \(inbox)").font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.warn) }
@@ -452,7 +452,7 @@ struct NativePhoneOwnerScanView: View {
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(NT.lilac))
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 5) {
-                        Text(d.typeLabel).font(.system(size: 10, weight: .heavy)).foregroundColor(.white)
+                        Text(d.typeLabel).font(.system(size: 10, weight: NT.strong)).foregroundColor(.white)
                             .padding(.horizontal, 5).padding(.vertical, 1)
                             .background(RoundedRectangle(cornerRadius: 5).fill(Self.tagColor(d.docType)))
                         Text(d.title ?? d.fileName).font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
@@ -465,7 +465,7 @@ struct NativePhoneOwnerScanView: View {
                 }
                 Spacer(minLength: 4)
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(d.amount.map { NOS.yen($0) } ?? "—").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(d.amount.map { NOS.yen($0) } ?? "—").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     NOSBadge(text: d.status == "inbox" ? "未仕分け" : "仕分け済", color: d.status == "inbox" ? NT.warn : NT.ok)
                 }
             }
@@ -574,7 +574,7 @@ struct NOMShotConfirmView: View {
             HStack {
                 Button("キャンセル", action: onCancel).font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
                 Spacer()
-                Text("切り取り・確認").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                Text("切り取り・確認").font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                 Spacer()
                 Button("撮り直す", action: onRetake).font(.system(size: 16, weight: .semibold)).foregroundColor(.white)
             }
@@ -614,8 +614,8 @@ struct NOMShotConfirmView: View {
                     onSave(image.nomCropped(crop))
                 } label: {
                     HStack(spacing: 6) {
-                        Image(systemName: "checkmark").font(.system(size: 15, weight: .heavy))
-                        Text("この写真を保存").font(.system(size: 16, weight: .heavy))
+                        Image(systemName: "checkmark").font(.system(size: 15, weight: NT.strong))
+                        Text("この写真を保存").font(.system(size: 16, weight: NT.strong))
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 54)

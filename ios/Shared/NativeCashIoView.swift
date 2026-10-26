@@ -228,7 +228,7 @@ struct NativeCashIoView: View {
     private func entryCard(_ p: NCIoPayload) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("登録").font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("登録").font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Text("Entry").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
             }
             if p.canScan {
@@ -358,7 +358,7 @@ struct NativeCashIoView: View {
                 TextField(shopping ? "例：レシートは事務所へ" : "例：千円札 → 小銭", text: $memo).textFieldStyle(.roundedBorder).frame(maxWidth: 280)
             }
             Button { Task { await submit(p) } } label: {
-                Text(model.busy ? "登録中…" : "登録する").font(.system(size: 18, weight: .heavy)).foregroundColor(.white)
+                Text(model.busy ? "登録中…" : "登録する").font(.system(size: 18, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 56)
                     .background(RoundedRectangle(cornerRadius: 14).fill(NFColor.iris))
                     .opacity(model.busy || disabled ? 0.4 : 1)
@@ -391,7 +391,7 @@ struct NativeCashIoView: View {
                 Text(label).font(.system(size: 14, weight: .medium)).foregroundColor(NFColor.ink)
                 Spacer()
                 Text(value.isEmpty ? "0" : (Int(value).map { $0.formatted() } ?? value))
-                    .font(.system(size: big ? 28 : 21, weight: .heavy)).monospacedDigit()
+                    .font(.system(size: big ? 28 : 21, weight: NT.strong)).monospacedDigit()
                     .foregroundColor(value.isEmpty ? NFColor.ink3 : (big ? NFColor.royal : NFColor.ink))
                 Text("円").font(.system(size: 13)).foregroundColor(NFColor.ink3)
             }
@@ -454,7 +454,7 @@ struct NativeCashIoView: View {
     private func historyCard(_ p: NCIoPayload) -> some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("本日の入出金履歴").font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("本日の入出金履歴").font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Text("Today").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
             }
             HStack(alignment: .firstTextBaseline) {
@@ -463,7 +463,7 @@ struct NativeCashIoView: View {
                     Text(p.sessions.isEmpty ? "開局中のレジがありません" : "釣銭準備金＋現金売上＋入金−出金−現金返金（開局中 \(p.sessions.count)台）").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                 }
                 Spacer()
-                Text(p.sessions.isEmpty ? "—" : NT.yen(p.theoretical)).font(.system(size: 28, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.royal)
+                Text(p.sessions.isEmpty ? "—" : NT.yen(p.theoretical)).font(.system(size: 28, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.royal)
             }
             .padding(14).background(RoundedRectangle(cornerRadius: 12).fill(NFColor.lilacSoft))
             if p.rows.isEmpty {

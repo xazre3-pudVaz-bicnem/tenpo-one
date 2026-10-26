@@ -161,7 +161,7 @@ struct NOMCashDayLinks: View {
             HStack(spacing: 10) {
                 Image(systemName: icon).font(.system(size: 16, weight: .bold)).foregroundColor(NT.purple).frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.ink)
                     Text(sub).font(.system(size: 11.5)).foregroundColor(NT.ink3).lineLimit(2).multilineTextAlignment(.leading)
                 }
                 Spacer(minLength: 4)
@@ -185,7 +185,7 @@ struct NOMStoreDayLink: View {
             HStack(spacing: 10) {
                 Image(systemName: "building.columns").font(.system(size: 16, weight: .bold)).foregroundColor(NT.purple).frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text("店舗日次締め・売上の内訳").font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("店舗日次締め・売上の内訳").font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.ink)
                     Text("全部のレジを締めたら、店舗日次締めを実行します").font(.system(size: 11.5)).foregroundColor(NT.ink3)
                 }
                 Spacer(minLength: 4)
@@ -296,7 +296,7 @@ struct NOMStoreDayView: View {
                 Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundColor(color).frame(width: 22)
                 Text(it.label).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 6)
-                Text(it.valueLabel).font(.system(size: 13.5, weight: it.status == "warn" ? .heavy : .bold)).foregroundColor(it.status == "info" ? NT.ink2 : color).monospacedDigit()
+                Text(it.valueLabel).font(.system(size: 13.5, weight: it.status == "warn" ? NT.strong : .bold)).foregroundColor(it.status == "info" ? NT.ink2 : color).monospacedDigit()
                 if target != nil { Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3) }
             }
             .padding(.horizontal, 12).frame(minHeight: 48)
@@ -343,7 +343,7 @@ struct NOMStoreDayView: View {
                         HStack {
                             Text(r.registerName).font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink)
                             Spacer()
-                            Text("差異 \(NOM.signed(r.difference))").font(.system(size: 13, weight: .heavy)).foregroundColor(r.difference != 0 ? NT.danger : NT.ink2).monospacedDigit()
+                            Text("差異 \(NOM.signed(r.difference))").font(.system(size: 13, weight: NT.strong)).foregroundColor(r.difference != 0 ? NT.danger : NT.ink2).monospacedDigit()
                         }
                         Text("理論 \(NOS.yen(r.expectedCash))・実 \(NOS.yen(r.countedCash))・締め \(r.closedByName)").font(.system(size: 11)).foregroundColor(NT.ink3)
                     }
@@ -362,7 +362,7 @@ struct NOMStoreDayView: View {
             Button { model.shift(-1) } label: { Image(systemName: "chevron.left").font(.system(size: 15, weight: .bold)).frame(width: 44, height: 40) }
             Spacer()
             Text(model.period == "month" ? NOS.ymLabel(model.date) : (NOS.isDay(model.date) ? NOS.mdw(model.date) : model.date))
-                .font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                .font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
             Spacer()
             Button { model.shift(1) } label: { Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold)).frame(width: 44, height: 40) }
                 .disabled(!model.canGoNext)
@@ -403,7 +403,7 @@ struct NOMStoreDayView: View {
                             Text("\(NOS.int(r.orders))件・\(NOS.int(r.guests))名\(r.items.map { "・\(NOS.int($0))品" } ?? "")").font(.system(size: 11)).foregroundColor(NT.ink3)
                         }
                         Spacer()
-                        Text(NOS.yen(r.sales)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NOS.yen(r.sales)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                 }
             }
@@ -415,11 +415,11 @@ struct NOMStoreDayView: View {
             NPOCard(title: title, trailing: "上位\(min(rows.count, 10))") {
                 ForEach(Array(rows.prefix(10).enumerated()), id: \.offset) { i, r in
                     HStack {
-                        Text("\(i + 1)").font(.system(size: 11, weight: .heavy)).foregroundColor(NT.ink3).frame(width: 18)
+                        Text("\(i + 1)").font(.system(size: 11, weight: NT.strong)).foregroundColor(NT.ink3).frame(width: 18)
                         Text(r.name).font(.system(size: 13.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                         Spacer()
                         Text("\(NOS.int(r.quantity))").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink2).monospacedDigit()
-                        Text(NOS.yen(r.sales)).font(.system(size: 13.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().frame(minWidth: 70, alignment: .trailing)
+                        Text(NOS.yen(r.sales)).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().frame(minWidth: 70, alignment: .trailing)
                     }
                 }
             }

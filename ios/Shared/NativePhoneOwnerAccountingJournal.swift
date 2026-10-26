@@ -276,7 +276,7 @@ struct NPACJournalPage: View {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
                 Text(e.description).font(.system(size: 15.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(2).multilineTextAlignment(.leading)
                 Spacer(minLength: 6)
-                Text(NT.yen(e.debitTotal)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NT.yen(e.debitTotal)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             Text("借方 \(NPACText.summary(e.lines, "debit"))　貸方 \(NPACText.summary(e.lines, "credit"))")
                 .font(.system(size: 12)).foregroundColor(NT.ink2).lineLimit(1)
@@ -386,14 +386,14 @@ struct NPACJournalDetail: View {
     private var header: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(entry.description).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+                Text(entry.description).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 6)
                 NOSBadge(text: entry.statusLabel, color: NPACText.statusColor(entry.status))
             }
             HStack(alignment: .firstTextBaseline) {
                 Text("金額（借方合計）").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
                 Spacer()
-                Text(NT.yen(entry.debitTotal)).font(.system(size: 28, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NT.yen(entry.debitTotal)).font(.system(size: 28, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             }
             NPZInfoRow(label: "日付", value: NPACText.date(entry.entryDate))
             NPZInfoRow(label: "店舗", value: entry.storeName ?? "全社")
@@ -428,7 +428,7 @@ struct NPACJournalDetail: View {
     private func lineRow(_ l: NPACJournalLine) -> some View {
         let isDebit = l.side == "debit"
         return HStack(alignment: .top, spacing: 10) {
-            Text(isDebit ? "借方" : "貸方").font(.system(size: 11.5, weight: .heavy))
+            Text(isDebit ? "借方" : "貸方").font(.system(size: 11.5, weight: NT.strong))
                 .foregroundColor(isDebit ? NT.purpleDeep : NT.ink2)
                 .frame(width: 40, height: 24)
                 .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(isDebit ? NT.lilac : NT.page))
@@ -438,7 +438,7 @@ struct NPACJournalDetail: View {
                 if let m = l.memo, !m.isEmpty { Text(m).font(.system(size: 12)).foregroundColor(NT.ink2).fixedSize(horizontal: false, vertical: true) }
             }
             Spacer(minLength: 6)
-            Text(NT.yen(l.amount)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+            Text(NT.yen(l.amount)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
         }
         .padding(.vertical, 4)
     }
@@ -539,7 +539,7 @@ struct NPACPeriodsPage: View {
             HStack(spacing: 8) {
                 Image(systemName: p.status == "closed" ? "lock.fill" : "lock.open").font(.system(size: 18, weight: .bold))
                     .foregroundColor(p.status == "closed" ? NT.ok : NT.ink3)
-                Text(p.monthLabel).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink)
+                Text(p.monthLabel).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 NOSBadge(text: p.statusLabel, color: NPACText.statusColor(p.status))
             }
@@ -603,7 +603,7 @@ struct NPACPeriodsPage: View {
                             NOSBadge(text: r.statusLabel, color: NPACText.statusColor(r.status))
                             Spacer(minLength: 4)
                             if r.draftCount > 0 { Text("下書き \(r.draftCount)").font(.system(size: 11.5, weight: .bold)).foregroundColor(NT.warn) }
-                            if r.month == p.month { Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.purple) }
+                            if r.month == p.month { Image(systemName: "checkmark").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.purple) }
                         }
                         if r.closedAtLabel != nil {
                             Text("締め：\(NPACText.actor(r.closedAtLabel, r.closedByName))").font(.system(size: 11)).foregroundColor(NT.ink3).lineLimit(1)

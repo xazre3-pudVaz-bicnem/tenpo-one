@@ -371,7 +371,7 @@ struct NPSHubView: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 6) {
                 Image(systemName: g.icon).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                Text(g.label).font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink3)
+                Text(g.label).font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink3)
             }
             .padding(.leading, 6)
             VStack(spacing: 0) {
@@ -402,7 +402,7 @@ struct NPSHubView: View {
                 }
                 Spacer(minLength: 6)
                 if iPadOnly || page == nil {
-                    Text("iPad・PC").font(.system(size: 10.5, weight: .heavy)).foregroundColor(NT.ink3)
+                    Text("iPad・PC").font(.system(size: 10.5, weight: NT.strong)).foregroundColor(NT.ink3)
                         .padding(.horizontal, 7).padding(.vertical, 3)
                         .overlay(Capsule().stroke(NT.line, lineWidth: 1))
                 }
@@ -443,7 +443,7 @@ struct NPSIPadCard: View {
             Image(systemName: icon).font(.system(size: 30, weight: .semibold)).foregroundColor(NT.purple)
                 .frame(width: 64, height: 64)
                 .background(Circle().fill(NT.lilac))
-            Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).multilineTextAlignment(.center)
+            Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).multilineTextAlignment(.center)
             Text(message).font(.system(size: 13.5)).foregroundColor(NT.ink2).multilineTextAlignment(.center).fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 14) {
                 Label("iPad のレジ", systemImage: "ipad")
@@ -506,7 +506,7 @@ struct NPSInput: View {
         VStack(alignment: .leading, spacing: 6) {
             HStack(spacing: 5) {
                 Text(label).font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink2)
-                if required { Text("必須").font(.system(size: 9.5, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NT.danger)) }
+                if required { Text("必須").font(.system(size: 9.5, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 5).padding(.vertical, 1).background(Capsule().fill(NT.danger)) }
             }
             .padding(.leading, 4)
             HStack(spacing: 6) {
@@ -578,7 +578,7 @@ struct NPSTag: View {
     let text: String
     var color: Color = NT.ink3
     var body: some View {
-        Text(text).font(.system(size: 10.5, weight: .heavy)).foregroundColor(color).lineLimit(1)
+        Text(text).font(.system(size: 10.5, weight: NT.strong)).foregroundColor(color).lineLimit(1)
             .padding(.horizontal, 6).padding(.vertical, 2)
             .overlay(Capsule().stroke(color.opacity(0.5), lineWidth: 1))
     }

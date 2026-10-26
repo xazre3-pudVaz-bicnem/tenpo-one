@@ -722,14 +722,14 @@ struct NativeTableQrScreen: View {
                     } else if t.url == nil {
                         VStack(spacing: 4) {
                             Image(systemName: "qrcode").font(.system(size: 36)).foregroundColor(NFColor.ink3.opacity(0.4))
-                            Text("QR停止中").font(.system(size: 12, weight: .heavy)).foregroundColor(NFColor.danger)
+                            Text("QR停止中").font(.system(size: 12, weight: NT.strong)).foregroundColor(NFColor.danger)
                         }
                     } else {
                         ProgressView()
                     }
                 }
                 .frame(height: 120)
-                Text(t.name).font(.system(size: 17, weight: .heavy)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(t.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
             }
             .padding(10)
             .frame(maxWidth: .infinity)
@@ -807,7 +807,7 @@ struct NTQTableSheet: View {
         NavigationStack {
             ScrollView {
                 VStack(spacing: 18) {
-                    Text(table.name).font(.system(size: 30, weight: .heavy)).foregroundColor(NFColor.ink)
+                    Text(table.name).font(.system(size: 30, weight: NT.strong)).foregroundColor(NFColor.ink)
                     if table.url == nil {
                         VStack(spacing: 6) {
                             Image(systemName: "qrcode").font(.system(size: 60)).foregroundColor(NFColor.ink3.opacity(0.4))

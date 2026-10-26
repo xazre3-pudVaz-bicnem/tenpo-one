@@ -258,7 +258,7 @@ struct NPRXRootView: View {
         return VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 Image(systemName: NPRXText.icon(o.status)).font(.system(size: 24)).foregroundColor(tone)
-                Text(o.message).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+                Text(o.message).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
                 Spacer(minLength: 0)
             }
             WrapLayout(spacing: 6) {
@@ -284,11 +284,11 @@ struct NPRXRootView: View {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
                             Text(r.label).font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink).underline()
                             Spacer(minLength: 6)
-                            Text(NPIVText.yen(r.amount)).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                            Text(NPIVText.yen(r.amount)).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         }
                         HStack(spacing: 6) {
                             Text("POS純売上との差額").font(.system(size: 11)).foregroundColor(NT.ink3)
-                            Text(r.diff).font(.system(size: 12.5, weight: r.mismatch ? .heavy : .semibold)).monospacedDigit()
+                            Text(r.diff).font(.system(size: 12.5, weight: r.mismatch ? NT.strong : .semibold)).monospacedDigit()
                                 .foregroundColor(r.mismatch ? NT.danger : (r.key == "pos" ? NT.ink3 : NT.ink))
                             Spacer(minLength: 0)
                             Image(systemName: "chevron.right").font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3)
@@ -337,7 +337,7 @@ struct NPRXRootView: View {
                                     Text(r.dateLabel).font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink)
                                     Text(r.storeName).font(.system(size: 11.5)).foregroundColor(NT.ink3).lineLimit(1)
                                     Spacer(minLength: 4)
-                                    Text(r.differenceLabel).font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.danger).monospacedDigit()
+                                    Text(r.differenceLabel).font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.danger).monospacedDigit()
                                 }
                                 HStack(spacing: 10) {
                                     Text("理論 \(NPIVText.yen(r.expected))")
@@ -382,7 +382,7 @@ struct NPRXRootView: View {
                         Spacer(minLength: 6)
                         VStack(alignment: .trailing, spacing: 2) {
                             Text(r.qtyLabel).font(.system(size: 13, weight: .bold)).foregroundColor(r.short ? NT.danger : NT.ok).monospacedDigit()
-                            Text(r.amountLabel).font(.system(size: 13.5, weight: .heavy)).foregroundColor(r.mismatch ? NT.danger : NT.ink).monospacedDigit()
+                            Text(r.amountLabel).font(.system(size: 13.5, weight: NT.strong)).foregroundColor(r.mismatch ? NT.danger : NT.ink).monospacedDigit()
                         }
                     }
                     .padding(.vertical, 4)

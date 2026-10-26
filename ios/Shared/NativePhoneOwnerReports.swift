@@ -315,12 +315,12 @@ struct NativePhoneOwnerReportsView: View {
         let cmp = p.compareLabel ?? "前期間比"
         return NPOCard {
             HStack(alignment: .firstTextBaseline) {
-                Text("純売上").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink2)
+                Text("純売上").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink2)
                 Text("Net sales").font(.system(size: 10.5, weight: .semibold)).foregroundColor(NT.ink3)
                 Spacer()
                 NOSDelta(pct: NOS.change(p.salesTotal, p.prevSalesTotal), label: cmp)
             }
-            Text(NOS.yen(p.salesTotal)).font(.system(size: 34, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+            Text(NOS.yen(p.salesTotal)).font(.system(size: 34, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                 .lineLimit(1).minimumScaleFactor(0.5)
             HStack(spacing: 0) {
                 stat("客数", "\(NOS.int(p.guestCount))名", NOS.change(p.guestCount, p.prevGuestCount))
@@ -348,7 +348,7 @@ struct NativePhoneOwnerReportsView: View {
     private func stat(_ label: String, _ value: String, _ change: Double?) -> some View {
         VStack(spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-            Text(value).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             if change != nil { NOSDelta(pct: change) } else { Text(" ").font(.system(size: 11)) }
         }
         .frame(maxWidth: .infinity)
@@ -357,7 +357,7 @@ struct NativePhoneOwnerReportsView: View {
     private func miniMoney(_ label: String, _ v: Double, _ change: Double?) -> some View {
         VStack(alignment: .leading, spacing: 2) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3)
-            Text(NOS.yen(v)).font(.system(size: 16, weight: .heavy)).foregroundColor(v >= 0 ? NT.ink : NT.danger).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(NOS.yen(v)).font(.system(size: 16, weight: NT.strong)).foregroundColor(v >= 0 ? NT.ink : NT.danger).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             NOSDelta(pct: change)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -473,7 +473,7 @@ struct NativePhoneOwnerReportsView: View {
 
     private func productRow(_ rank: Int, _ r: NOSReport.Product) -> some View {
         HStack(spacing: 10) {
-            Text("\(rank)").font(.system(size: 11, weight: .heavy)).foregroundColor(rank <= 3 ? .white : NT.ink3)
+            Text("\(rank)").font(.system(size: 11, weight: NT.strong)).foregroundColor(rank <= 3 ? .white : NT.ink3)
                 .frame(width: 22, height: 22).background(Circle().fill(rank <= 3 ? NT.purple : NT.page))
             VStack(alignment: .leading, spacing: 1) {
                 Text(r.name).font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
@@ -486,7 +486,7 @@ struct NativePhoneOwnerReportsView: View {
                 .monospacedDigit()
             }
             Spacer(minLength: 6)
-            Text(NOS.yen(r.revenue)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+            Text(NOS.yen(r.revenue)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
         }
         .padding(.vertical, 8)
         .overlay(alignment: .bottom) { Rectangle().fill(NT.line.opacity(0.7)).frame(height: 1) }
@@ -525,7 +525,7 @@ struct NativePhoneOwnerReportsView: View {
                         Text("\(NOS.int(r.count))件・客単価 \(NOS.yen(r.avgSpend))").font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3).monospacedDigit()
                     }
                     Spacer(minLength: 6)
-                    Text(NOS.yen(r.sales)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                    Text(NOS.yen(r.sales)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 }
                 .padding(.vertical, 4)
             }
@@ -560,7 +560,7 @@ struct NativePhoneOwnerReportsView: View {
     private func kpi(_ label: String, _ value: String, _ delta: NOSDelta?, warn: Bool = false) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.8)
-            Text(value).font(.system(size: 18, weight: .heavy)).foregroundColor(warn ? NT.warn : NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(value).font(.system(size: 18, weight: NT.strong)).foregroundColor(warn ? NT.warn : NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
             if let delta { delta } else { Text(" ").font(.system(size: 11)) }
         }
         .frame(maxWidth: .infinity, alignment: .leading)
@@ -577,7 +577,7 @@ struct NativePhoneOwnerReportsView: View {
             Button { onWeb("/app/orders?from=\(p.from)&to=\(p.to)") } label: {
                 HStack(spacing: 6) {
                     Image(systemName: "doc.text").font(.system(size: 14, weight: .bold))
-                    Text("この期間の伝票明細を見る").font(.system(size: 14, weight: .heavy))
+                    Text("この期間の伝票明細を見る").font(.system(size: 14, weight: NT.strong))
                     Spacer()
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold))
                 }

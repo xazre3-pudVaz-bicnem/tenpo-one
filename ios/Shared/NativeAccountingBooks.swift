@@ -503,7 +503,7 @@ struct NAccStatementsPage: View {
         NAccCard {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("試算表（期首残高対応）").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("試算表（期首残高対応）").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                     Spacer()
                     NPBadge(text: p.trialBalanced ? "期間内の借方・貸方は一致しています" : "貸借不一致 — データ異常です", color: p.trialBalanced ? NFColor.success : NFColor.danger)
                 }
@@ -594,9 +594,9 @@ struct NAccStatementsPage: View {
 
     private func plTotal(_ label: String, _ value: Int, tone: Color = NT.ink) -> some View {
         HStack {
-            Text(label).font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.ink)
+            Text(label).font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.ink)
             Spacer()
-            Text(NT.yen(value)).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(tone)
+            Text(NT.yen(value)).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(tone)
         }
         .padding(.horizontal, 14).frame(minHeight: 40)
         .overlay(alignment: .top) { Rectangle().fill(NT.ink.opacity(0.12)).frame(height: 2) }
@@ -606,7 +606,7 @@ struct NAccStatementsPage: View {
         NAccCard {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("損益計算書（段階損益）").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("損益計算書（段階損益）").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                     Spacer()
                     NPBadge(text: "表示範囲: \(p.storeName ?? "全社（全店舗）")", color: NT.ink3)
                 }
@@ -693,7 +693,7 @@ struct NAccStatementsPage: View {
         NAccCard {
             VStack(alignment: .leading, spacing: 0) {
                 HStack {
-                    Text("貸借対照表").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink)
+                    Text("貸借対照表").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink)
                     Spacer()
                     NPBadge(text: p.bs.balanced ? "貸借が一致しています" : "貸借が一致していません", color: p.bs.balanced ? NFColor.success : NFColor.danger)
                 }

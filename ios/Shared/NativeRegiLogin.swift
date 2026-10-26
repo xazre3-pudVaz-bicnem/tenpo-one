@@ -144,7 +144,7 @@ struct NativeRegiLoginView: View {
             .frame(maxHeight: .infinity)
             // 右：入力
             VStack(alignment: .leading, spacing: 16) {
-                Text("ログイン").font(.system(size: 28, weight: .heavy)).foregroundColor(NT.ink)
+                Text("ログイン").font(.system(size: 28, weight: NT.strong)).foregroundColor(NT.ink)
                 if model.fixed {
                     fixedRow("企業番号", model.orgCode)
                     fixedRow("店舗コード", model.storeCode)
@@ -173,7 +173,7 @@ struct NativeRegiLoginView: View {
                 Button { Task { await model.submit() } } label: {
                     HStack(spacing: 8) {
                         if model.busy { ProgressView().tint(.white) }
-                        Text(model.busy ? "確認中…" : "ログイン").font(.system(size: 20, weight: .heavy))
+                        Text(model.busy ? "確認中…" : "ログイン").font(.system(size: 20, weight: NT.strong))
                     }
                     .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 62)
                     .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(model.canSubmit || model.busy ? NT.purple : NT.ink3))
@@ -197,7 +197,7 @@ struct NativeRegiLoginView: View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
                 Text(label).font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
-                Text(value).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(value).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             Spacer()
             Image(systemName: "lock.fill").font(.system(size: 14)).foregroundColor(NT.ink3)
@@ -239,7 +239,7 @@ struct NativeRegiClerkPicker: View {
         VStack(spacing: 22) {
             VStack(spacing: 6) {
                 Text(storeName).font(.system(size: 16, weight: .bold)).foregroundColor(.white.opacity(0.8))
-                Text("担当者を選んでください").font(.system(size: 32, weight: .heavy)).foregroundColor(.white)
+                Text("担当者を選んでください").font(.system(size: 32, weight: NT.strong)).foregroundColor(.white)
                 Text("Select staff").font(.system(size: 14, weight: .semibold)).foregroundColor(.white.opacity(0.65))
             }
             ScrollView {
@@ -247,10 +247,10 @@ struct NativeRegiClerkPicker: View {
                     ForEach(clerks) { c in
                         Button { onPick(c) } label: {
                             VStack(spacing: 10) {
-                                Text(String(c.name.prefix(1))).font(.system(size: 30, weight: .heavy)).foregroundColor(.white)
+                                Text(String(c.name.prefix(1))).font(.system(size: 30, weight: NT.strong)).foregroundColor(.white)
                                     .frame(width: 70, height: 70)
                                     .background(Circle().fill(NT.purple))
-                                Text(c.name).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1).minimumScaleFactor(0.7)
+                                Text(c.name).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1).minimumScaleFactor(0.7)
                                 Text(Self.roleLabel(c.role)).font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink3)
                             }
                             .frame(maxWidth: .infinity).padding(.vertical, 22)

@@ -342,7 +342,7 @@ struct NPHRStatusBadge: View {
 
     var body: some View {
         let t = NPHRTone.badge(status)
-        Text(label).font(.system(size: size, weight: .heavy)).foregroundColor(t.fg).lineLimit(1)
+        Text(label).font(.system(size: size, weight: NT.strong)).foregroundColor(t.fg).lineLimit(1)
             .padding(.horizontal, 7).padding(.vertical, 2)
             .background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(t.bg))
             .overlay(RoundedRectangle(cornerRadius: 5, style: .continuous).stroke(t.border, lineWidth: 1.5))
@@ -398,8 +398,8 @@ struct NativePhoneReservationsView: View {
                         if model.payload?.canWrite ?? false {
                             Button(action: onAdd) {
                                 VStack(spacing: 1) {
-                                    Image(systemName: "plus").font(.system(size: 17, weight: .heavy))
-                                    Text("予約登録").font(.system(size: 9.5, weight: .heavy)).lineLimit(1)
+                                    Image(systemName: "plus").font(.system(size: 17, weight: NT.strong))
+                                    Text("予約登録").font(.system(size: 9.5, weight: NT.strong)).lineLimit(1)
                                 }
                                 .foregroundColor(.white).frame(width: 52, height: 44)
                             }
@@ -450,9 +450,9 @@ struct NativePhoneReservationsView: View {
                 Button { model.select(t) } label: {
                     VStack(spacing: 0) {
                         HStack(spacing: 5) {
-                            Text(t.label).font(.system(size: 14, weight: .heavy)).foregroundColor(on ? NT.ink : NT.ink3).lineLimit(1)
+                            Text(t.label).font(.system(size: 14, weight: NT.strong)).foregroundColor(on ? NT.ink : NT.ink3).lineLimit(1)
                             if count > 0 {
-                                Text(count > 99 ? "99+" : "\(count)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                                Text(count > 99 ? "99+" : "\(count)").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white)
                                     .padding(.horizontal, 5).frame(minWidth: 19, minHeight: 19)
                                     .background(Capsule().fill(t == .messages ? NT.purple : NT.danger))
                             }
@@ -492,7 +492,7 @@ struct NativePhoneReservationsView: View {
                 Image(systemName: "exclamationmark.circle").font(.system(size: 30, weight: .semibold)).foregroundColor(NT.ink3)
                 Text(e).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink2).multilineTextAlignment(.center).padding(.horizontal, 28)
                 Button { Task { await model.refresh() } } label: {
-                    Text("もう一度読む").font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                    Text("もう一度読む").font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 22).frame(height: 44)
                         .background(Capsule().fill(NT.purple))
                 }
@@ -518,7 +518,7 @@ struct NativePhoneReservationsView: View {
                 } else {
                     let shown = model.hideCancelled ? p.reservations.filter { !$0.cancelled } : p.reservations
                     HStack(spacing: 8) {
-                        Text("\(shown.count)件").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text("\(shown.count)件").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         Text("時間が早い順").font(.system(size: 11.5)).foregroundColor(NT.ink3)
                         Spacer(minLength: 4)
                         Text("キャンセルを除く").font(.system(size: 12, weight: .semibold)).foregroundColor(NT.ink2)
@@ -559,7 +559,7 @@ struct NativePhoneReservationsView: View {
             HStack(spacing: 0) {
                 if !isToday {
                     Button { model.go(model.today) } label: {
-                        Text("今日").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.purple)
+                        Text("今日").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.purple)
                             .padding(.horizontal, 11).frame(height: 32)
                             .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
                     }
@@ -569,8 +569,8 @@ struct NativePhoneReservationsView: View {
                 Button { calendarOpen = true } label: {
                     HStack(spacing: 6) {
                         Image(systemName: "calendar").font(.system(size: 15, weight: .bold)).foregroundColor(NT.purple)
-                        Text(NPHRDate.dayLabel(d)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
-                        if isToday { Text("今日").font(.system(size: 10.5, weight: .heavy)).foregroundColor(NT.purple) }
+                        Text(NPHRDate.dayLabel(d)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1)
+                        if isToday { Text("今日").font(.system(size: 10.5, weight: NT.strong)).foregroundColor(NT.purple) }
                     }
                     .frame(maxWidth: .infinity).frame(height: 42)
                     .contentShape(Rectangle())
@@ -587,7 +587,7 @@ struct NativePhoneReservationsView: View {
 
     private func navButton(_ icon: String, label: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink2)
+            Image(systemName: icon).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink2)
                 .frame(width: 44, height: 42)
                 .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white))
                 .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -607,7 +607,7 @@ struct NPHRRowCard: View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 6) {
                 NPHRStatusBadge(status: r.status, label: r.statusLabel)
-                Text("\(r.name) 様").font(.system(size: 15, weight: .heavy)).foregroundColor(dim ? NT.ink2 : NT.ink)
+                Text("\(r.name) 様").font(.system(size: 15, weight: NT.strong)).foregroundColor(dim ? NT.ink2 : NT.ink)
                     .multilineTextAlignment(.leading).lineLimit(3).fixedSize(horizontal: false, vertical: true)
                 if r.walkIn {
                     Text("ウォークイン").font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3)
@@ -616,7 +616,7 @@ struct NPHRRowCard: View {
             .frame(width: 118, alignment: .leading)
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text("\(r.time)〜 \(r.partySize)名").font(.system(size: 15, weight: .heavy)).foregroundColor(dim ? NT.ink2 : NT.ink).monospacedDigit().lineLimit(1)
+                    Text("\(r.time)〜 \(r.partySize)名").font(.system(size: 15, weight: NT.strong)).foregroundColor(dim ? NT.ink2 : NT.ink).monospacedDigit().lineLimit(1)
                     HStack(spacing: 3) {
                         Image(systemName: "rectangle.split.3x3").font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3)
                         Text(r.tableLabel).font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink2).lineLimit(1)
@@ -630,7 +630,7 @@ struct NPHRRowCard: View {
                     if let total = r.billTotal {
                         HStack(spacing: 4) {
                             Image(systemName: "doc.text").font(.system(size: 10, weight: .bold)).foregroundColor(NT.ink3).frame(width: 13)
-                            Text("会計 \(nphrYen(total))").font(.system(size: 11.5, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                            Text("会計 \(nphrYen(total))").font(.system(size: 11.5, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                             if let at = r.paidAt { Text(at).font(.system(size: 11)).foregroundColor(NT.ink3).monospacedDigit() }
                         }
                     }
@@ -685,7 +685,7 @@ struct NPHRInboxTasks: View {
                 if tasks.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.circle").font(.system(size: 32, weight: .semibold)).foregroundColor(NT.ok)
-                        Text("やることはありません").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                        Text("やることはありません").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                         Text("仮予約・要連絡・新しいネット予約・変更・キャンセル・グルメサイトの要確認が入ると、ここに出ます。")
                             .font(.system(size: 12)).foregroundColor(NT.ink3).multilineTextAlignment(.center)
                     }
@@ -698,8 +698,8 @@ struct NPHRInboxTasks: View {
                         VStack(alignment: .leading, spacing: 6) {
                             HStack(spacing: 6) {
                                 Image(systemName: g.icon).font(.system(size: 13, weight: .bold)).foregroundColor(NT.purple)
-                                Text(g.label).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1).fixedSize()
-                                Text("\(items.count)件").font(.system(size: 11, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                                Text(g.label).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1).fixedSize()
+                                Text("\(items.count)件").font(.system(size: 11, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                                     .padding(.horizontal, 7).padding(.vertical, 2).background(Capsule().fill(NT.lilac)).fixedSize()
                             }
                             Text(g.hint).font(.system(size: 10.5)).foregroundColor(NT.ink3).lineLimit(2)
@@ -725,7 +725,7 @@ struct NPHRInboxTasks: View {
         let a = action(t)
         return HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(t.title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text(t.title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Text(t.detail).font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink2).monospacedDigit().lineLimit(1)
                 HStack(spacing: 6) {
                     if let n = t.note, !n.isEmpty {
@@ -744,8 +744,8 @@ struct NPHRInboxTasks: View {
                         }
                     } label: {
                         HStack(spacing: 4) {
-                            if model.busy == t.key { ProgressView().tint(.white).scaleEffect(0.75) } else { Image(systemName: "checkmark").font(.system(size: 12, weight: .heavy)) }
-                            Text(a.label).font(.system(size: 13, weight: .heavy)).lineLimit(1)
+                            if model.busy == t.key { ProgressView().tint(.white).scaleEffect(0.75) } else { Image(systemName: "checkmark").font(.system(size: 12, weight: NT.strong)) }
+                            Text(a.label).font(.system(size: 13, weight: NT.strong)).lineLimit(1)
                         }
                         .foregroundColor(.white).padding(.horizontal, 12).frame(minWidth: 92).frame(height: 36)
                         .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(NT.purple))
@@ -824,9 +824,9 @@ struct NPHRInboxNotices: View {
                     .frame(width: 32, height: 32).background(Circle().fill(l.bg))
                 VStack(alignment: .leading, spacing: 3) {
                     HStack(spacing: 6) {
-                        Text(n.title).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                        Text(n.title).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                         if fresh {
-                            Text("新着").font(.system(size: 10, weight: .heavy)).foregroundColor(.white)
+                            Text("新着").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white)
                                 .padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NT.purple))
                         }
                     }
@@ -834,7 +834,7 @@ struct NPHRInboxNotices: View {
                         Text(n.detail).font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink2).monospacedDigit().lineLimit(1)
                     }
                     HStack(spacing: 6) {
-                        Text(l.label).font(.system(size: 10.5, weight: .heavy)).foregroundColor(l.fg)
+                        Text(l.label).font(.system(size: 10.5, weight: NT.strong)).foregroundColor(l.fg)
                             .padding(.horizontal, 6).padding(.vertical, 1).background(RoundedRectangle(cornerRadius: 4).fill(l.bg))
                         if let note = n.note, !note.isEmpty { Text(note).font(.system(size: 10.5)).foregroundColor(NT.ink3).lineLimit(1) }
                     }
@@ -934,7 +934,7 @@ struct NPHRDetailSheet: View {
     private var info: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("\(row.name) 様").font(.system(size: 21, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+                Text("\(row.name) 様").font(.system(size: 21, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
                 if let k = row.nameKana { Text(k).font(.system(size: 12)).foregroundColor(NT.ink3) }
             }
             HStack(spacing: 8) {
@@ -955,7 +955,7 @@ struct NPHRDetailSheet: View {
                 infoRow("person.crop.circle", "担当") { Text(row.clerkName ?? "-") }
                 infoRow("phone.fill", "電話") {
                     if let phone = row.phone, let url = Self.telURL(phone) {
-                        Link(destination: url) { Text(phone).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purple).monospacedDigit() }
+                        Link(destination: url) { Text(phone).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purple).monospacedDigit() }
                     } else {
                         Text("-")
                     }
@@ -1007,11 +1007,11 @@ struct NPHRDetailSheet: View {
         VStack(alignment: .leading, spacing: 3) {
             HStack(spacing: 4) {
                 Image(systemName: icon).font(.system(size: 11, weight: .bold))
-                Text(title).font(.system(size: 11, weight: .heavy)).lineLimit(1)
+                Text(title).font(.system(size: 11, weight: NT.strong)).lineLimit(1)
             }
             .foregroundColor(titleColor)
             HStack(alignment: .firstTextBaseline, spacing: 3) {
-                Text(value).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
+                Text(value).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
                 if let sub { Text(sub).font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.7) }
             }
         }
@@ -1031,7 +1031,7 @@ struct NPHRDetailSheet: View {
             .frame(width: 92, alignment: .leading)
             .padding(.top, 1)
             inner
-                .font(.system(size: 14, weight: strong ? .heavy : .regular))
+                .font(.system(size: 14, weight: strong ? NT.strong : .regular))
                 .foregroundColor(strong ? NT.danger : NT.ink)
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
@@ -1087,7 +1087,7 @@ struct NPHRDetailSheet: View {
                     Button { Task { await run(["type": "handyRsvArrive", "reservationId": row.id], key: "arrive") } } label: {
                         HStack(spacing: 5) {
                             if model.busy == "arrive" { ProgressView().tint(.white).scaleEffect(0.8) }
-                            Text("来店").font(.system(size: 15, weight: .heavy))
+                            Text("来店").font(.system(size: 15, weight: NT.strong))
                         }
                         .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 48)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.purple))
@@ -1101,7 +1101,7 @@ struct NPHRDetailSheet: View {
                     Button { Task { await run(["type": "handyRsvTables", "reservationId": row.id, "tableIds": picked], key: "tables") } } label: {
                         HStack(spacing: 5) {
                             if model.busy == "tables" { ProgressView().tint(.white).scaleEffect(0.8) }
-                            Text("このテーブルにする").font(.system(size: 15, weight: .heavy)).lineLimit(1)
+                            Text("このテーブルにする").font(.system(size: 15, weight: NT.strong)).lineLimit(1)
                         }
                         .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 48)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.purple))
@@ -1121,7 +1121,7 @@ struct NPHRDetailSheet: View {
 
     private func panelButton(_ title: String, color: Color, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(title).font(.system(size: 14, weight: .heavy)).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.8)
+            Text(title).font(.system(size: 14, weight: NT.strong)).foregroundColor(color).lineLimit(1).minimumScaleFactor(0.8)
                 .frame(maxWidth: .infinity).frame(height: 48)
                 .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
                 .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -1138,7 +1138,7 @@ struct NPHRDetailSheet: View {
             ("no_show", "無断キャンセル", "連絡なし・連絡が取れない"),
         ]
         return VStack(spacing: 8) {
-            Text("キャンセルの種類を選んでください").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink2).frame(maxWidth: .infinity, alignment: .leading)
+            Text("キャンセルの種類を選んでください").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink2).frame(maxWidth: .infinity, alignment: .leading)
             ForEach(kinds, id: \.key) { k in
                 // 無断キャンセルは仮予約にはできない。お客様・店舗キャンセルはキャンセルの権限（Web と同じ）
                 let allowed = k.key == "no_show" ? row.status != "pending" : (p?.canCancel ?? false)
@@ -1147,7 +1147,7 @@ struct NPHRDetailSheet: View {
                     Task { await run(["type": "handyRsvCancel", "reservationId": row.id, "kind": k.key], key: "cancel") }
                 } label: {
                     VStack(spacing: 1) {
-                        Text(k.label).font(.system(size: 15, weight: .heavy))
+                        Text(k.label).font(.system(size: 15, weight: NT.strong))
                         Text(k.hint).font(.system(size: 10.5, weight: .semibold)).opacity(0.75)
                     }
                     .foregroundColor(k.key == "no_show" ? NT.danger : NT.ink)
@@ -1160,7 +1160,7 @@ struct NPHRDetailSheet: View {
                 .opacity(allowed ? 1 : 0.4)
             }
             Button { mode = nil } label: {
-                Text("やめる").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink3).frame(maxWidth: .infinity).frame(height: 36)
+                Text("やめる").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink3).frame(maxWidth: .infinity).frame(height: 36)
             }
             .buttonStyle(.plain)
         }
@@ -1170,7 +1170,7 @@ struct NPHRDetailSheet: View {
     private var storeStaffPicker: some View {
         let staff = p?.staff ?? []
         return VStack(spacing: 8) {
-            Text("店舗キャンセル：担当を選んでください").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink2).frame(maxWidth: .infinity, alignment: .leading)
+            Text("店舗キャンセル：担当を選んでください").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink2).frame(maxWidth: .infinity, alignment: .leading)
             if staff.isEmpty {
                 Text("担当がいません。レジの設定で担当を入れてください").font(.system(size: 12.5)).foregroundColor(NT.ink3)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(12)
@@ -1180,7 +1180,7 @@ struct NPHRDetailSheet: View {
                     LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
                         ForEach(staff) { s in
                             Button { Task { await run(["type": "handyRsvCancel", "reservationId": row.id, "kind": "store", "staffId": s.id], key: "cancel") } } label: {
-                                Text(s.name).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1).minimumScaleFactor(0.75)
+                                Text(s.name).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1).minimumScaleFactor(0.75)
                                     .frame(maxWidth: .infinity).frame(height: 46)
                                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
                                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -1193,7 +1193,7 @@ struct NPHRDetailSheet: View {
                 .frame(maxHeight: 220)
             }
             Button { storeCancel = false } label: {
-                Text("もどる").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink3).frame(maxWidth: .infinity).frame(height: 36)
+                Text("もどる").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink3).frame(maxWidth: .infinity).frame(height: 36)
             }
             .buttonStyle(.plain)
         }
@@ -1217,7 +1217,7 @@ struct NPHRDetailSheet: View {
             if let phone = row.phone, let url = Self.telURL(phone) {
                 Link(destination: url) {
                     HStack(spacing: 5) { Image(systemName: "phone.fill"); Text("電話する") }
-                        .font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                        .font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                         .frame(maxWidth: .infinity).frame(height: 48)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -1225,14 +1225,14 @@ struct NPHRDetailSheet: View {
             }
             if let tableId = row.tableId, !row.cancelled {
                 Button { onOpenTable(tableId) } label: {
-                    Text("HANDYで注文").font(.system(size: 14, weight: .heavy)).foregroundColor(.white).lineLimit(1)
+                    Text("HANDYで注文").font(.system(size: 14, weight: NT.strong)).foregroundColor(.white).lineLimit(1)
                         .frame(maxWidth: .infinity).frame(height: 48)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.purple))
                 }
                 .buttonStyle(PressableStyle())
             }
             Button(action: onClose) {
-                Text("閉じる").font(.system(size: 14, weight: .heavy)).foregroundColor(.white)
+                Text("閉じる").font(.system(size: 14, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 48)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.topBar))
             }
@@ -1288,7 +1288,7 @@ struct NPHRTablePicker: View {
         let names = entry.tables.filter { selected.contains($0.id) }.map(\.name).joined(separator: " + ")
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
-                Text("予約可能なテーブル").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink2)
+                Text("予約可能なテーブル").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink2)
                 Text("（\(party)名に合う席・複数選択可）").font(.system(size: 10.5)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.8)
             }
             if !selected.isEmpty {
@@ -1296,7 +1296,7 @@ struct NPHRTablePicker: View {
                     Text(names).foregroundColor(NT.purple)
                     Text(seatsNote(seats)).foregroundColor(seats < party ? NT.danger : NT.ink2)
                 }
-                .font(.system(size: 13, weight: .heavy))
+                .font(.system(size: 13, weight: NT.strong))
                 .lineLimit(2)
             }
             ForEach(Array(list.enumerated()), id: \.element.id) { index, slot in
@@ -1314,7 +1314,7 @@ struct NPHRTablePicker: View {
         let otherCount = slot.others.count + slot.busy.count
         return VStack(alignment: .leading, spacing: 6) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text("\(slot.time)〜\(NRWMath.addMinutes(slot.time, stay))").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text("\(slot.time)〜\(NRWMath.addMinutes(slot.time, stay))").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 if !first { Text("※押すと開始が30分後になります").font(.system(size: 10.5)).foregroundColor(NT.ink3).lineLimit(1).minimumScaleFactor(0.8) }
             }
             .padding(.leading, 8)
@@ -1374,14 +1374,14 @@ struct NPHRTablePicker: View {
         let border: Color = !c.free ? NT.line : on ? Color.clear : c.best ? NT.purple : NT.line
         return Button { action?() } label: {
             VStack(spacing: 2) {
-                Text(t.name).font(.system(size: 15, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(t.name).font(.system(size: 15, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7)
                 Text(cap + (t.floorName.map { "・\($0)" } ?? "")).font(.system(size: 10.5)).opacity(on ? 0.85 : 0.75).lineLimit(1).minimumScaleFactor(0.7)
                 if c.free && c.fit == .small {
-                    Text("席が足りない").font(.system(size: 9.5, weight: .heavy)).foregroundColor(on ? .white : NT.danger)
+                    Text("席が足りない").font(.system(size: 9.5, weight: NT.strong)).foregroundColor(on ? .white : NT.danger)
                 } else if c.free && c.fit == .big {
                     Text("大きめ").font(.system(size: 9.5)).opacity(0.75)
                 } else if !c.free {
-                    Text(c.reason ?? "").font(.system(size: 9.5, weight: .heavy))
+                    Text(c.reason ?? "").font(.system(size: 9.5, weight: NT.strong))
                 }
             }
             .foregroundColor(fg)
@@ -1390,11 +1390,11 @@ struct NPHRTablePicker: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(bg))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(border, lineWidth: c.best && !on ? 1.5 : 1))
             .overlay(alignment: .topTrailing) {
-                if on { Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(5) }
+                if on { Image(systemName: "checkmark").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white).padding(5) }
             }
             .overlay(alignment: .top) {
                 if c.best && !on {
-                    Text("ピッタリ").font(.system(size: 9.5, weight: .heavy)).foregroundColor(.white).lineLimit(1).fixedSize()
+                    Text("ピッタリ").font(.system(size: 9.5, weight: NT.strong)).foregroundColor(.white).lineLimit(1).fixedSize()
                         .padding(.horizontal, 6).padding(.vertical, 1)
                         .background(Capsule().fill(NT.purple))
                         .offset(y: -8)
@@ -1408,7 +1408,7 @@ struct NPHRTablePicker: View {
     private func comboCard(_ combo: NRWCombo, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 2) {
-                Text(combo.tables.map(\.name).joined(separator: " + ")).font(.system(size: 14, weight: .heavy)).lineLimit(1).minimumScaleFactor(0.7)
+                Text(combo.tables.map(\.name).joined(separator: " + ")).font(.system(size: 14, weight: NT.strong)).lineLimit(1).minimumScaleFactor(0.7)
                 Text("合計\(combo.seats)名" + (combo.tables.first?.floorName.map { "・\($0)" } ?? "")).font(.system(size: 10.5)).opacity(0.8).lineLimit(1)
             }
             .foregroundColor(on ? .white : NT.ink)
@@ -1417,7 +1417,7 @@ struct NPHRTablePicker: View {
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? NT.purple : NT.lilac))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? Color.clear : NT.purple, lineWidth: 1.5))
             .overlay(alignment: .topTrailing) {
-                if on { Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy)).foregroundColor(.white).padding(5) }
+                if on { Image(systemName: "checkmark").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white).padding(5) }
             }
         }
         .buttonStyle(PressableStyle(scale: 0.95))
@@ -1443,7 +1443,7 @@ struct NPHRCalendarSheet: View {
                 }
                 .accessibilityLabel("閉じる")
                 Spacer()
-                Text("日付選択").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                Text("日付選択").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                 Spacer()
                 Color.clear.frame(width: 40, height: 40)
             }
@@ -1452,7 +1452,7 @@ struct NPHRCalendarSheet: View {
             HStack(spacing: 10) {
                 monthButton("chevron.left") { month = payloads[month]?.prevMonth ?? shift(month, -1) }
                 Spacer()
-                Text(monthLabel).font(.system(size: 19, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(monthLabel).font(.system(size: 19, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 Spacer()
                 monthButton("chevron.right") { month = payloads[month]?.nextMonth ?? shift(month, 1) }
             }
@@ -1466,7 +1466,7 @@ struct NPHRCalendarSheet: View {
             .padding(.horizontal, 14).padding(.bottom, 6)
             HStack(spacing: 0) {
                 ForEach(Array(["日", "月", "火", "水", "木", "金", "土"].enumerated()), id: \.offset) { i, w in
-                    Text(w).font(.system(size: 12.5, weight: .heavy))
+                    Text(w).font(.system(size: 12.5, weight: NT.strong))
                         .foregroundColor(i == 0 ? NT.danger : i == 6 ? NT.purple : NT.ink2)
                         .frame(maxWidth: .infinity).frame(height: 30)
                 }
@@ -1492,7 +1492,7 @@ struct NPHRCalendarSheet: View {
             }
             HStack(spacing: 10) {
                 Button { month = String(today.prefix(7)) } label: {
-                    Text("今月を出す").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink2)
+                    Text("今月を出す").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink2)
                         .padding(.horizontal, 14).frame(height: 42)
                         .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 11, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -1501,7 +1501,7 @@ struct NPHRCalendarSheet: View {
                 .disabled(month == String(today.prefix(7)))
                 Spacer()
                 Button { onPick(today) } label: {
-                    Text("今日へ").font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                    Text("今日へ").font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                         .padding(.horizontal, 22).frame(height: 42)
                         .background(RoundedRectangle(cornerRadius: 11, style: .continuous).fill(NT.purple))
                 }
@@ -1547,7 +1547,7 @@ struct NPHRCalendarSheet: View {
         let bg: Color = on ? NT.purple : d.closed ? Color(hex: 0xE4E7EE) : Color.clear
         return Button { onPick(d.date) } label: {
             VStack(spacing: 1) {
-                Text("\(d.day)").font(.system(size: 18, weight: on || isToday ? .heavy : .semibold)).foregroundColor(color).monospacedDigit()
+                Text("\(d.day)").font(.system(size: 18, weight: on || isToday ? NT.strong : .semibold)).foregroundColor(color).monospacedDigit()
                 Text(d.guests > 0 ? "\(d.guests)名" : " ").font(.system(size: 10, weight: .semibold)).foregroundColor(on ? .white.opacity(0.9) : NT.ink3)
                     .monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
             }
@@ -1683,7 +1683,7 @@ struct NPHRNewReservationView: View {
 
     private var step1: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("日時・人数を入れて、テーブルを選んでください").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+            Text("日時・人数を入れて、テーブルを選んでください").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
             if let e = loadError {
                 Text(e).font(.system(size: 13, weight: .bold)).foregroundColor(NT.danger)
                     .frame(maxWidth: .infinity, alignment: .leading).padding(12)
@@ -1762,7 +1762,7 @@ struct NPHRNewReservationView: View {
             }
         } label: {
             HStack(spacing: 2) {
-                Text("\(selection.wrappedValue)\(suffix)").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text("\(selection.wrappedValue)\(suffix)").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                 Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)).foregroundColor(NT.purple)
             }
             .frame(maxWidth: .infinity).frame(height: 44)
@@ -1774,12 +1774,12 @@ struct NPHRNewReservationView: View {
     /// 人数（− 数字 ＋。数字を押すとテンキー。Web の PartyCountField と同じ）
     private func countControl(_ label: String, value: Int, min: Int, field f: CountField, set: @escaping (Int) -> Void) -> some View {
         VStack(alignment: .leading, spacing: 5) {
-            Text(label).font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink2)
+            Text(label).font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink2)
             HStack(spacing: 5) {
                 stepButton("minus", disabled: value <= min) { set(Swift.max(min, value - 1)) }
                 Button { countField = f } label: {
                     HStack(alignment: .firstTextBaseline, spacing: 1) {
-                        Text("\(value)").font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text("\(value)").font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                         Text("名").font(.system(size: 11, weight: .semibold)).foregroundColor(NT.ink3)
                     }
                     .frame(maxWidth: .infinity).frame(height: 44)
@@ -1796,7 +1796,7 @@ struct NPHRNewReservationView: View {
 
     private func stepButton(_ icon: String, disabled: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Image(systemName: icon).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink2)
+            Image(systemName: icon).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink2)
                 .frame(width: 40, height: 44)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
                 .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -1830,7 +1830,7 @@ struct NPHRNewReservationView: View {
                 card {
                     HStack(spacing: 4) {
                         Image(systemName: "tag").font(.system(size: 12, weight: .bold))
-                        Text("キーワード").font(.system(size: 12, weight: .heavy))
+                        Text("キーワード").font(.system(size: 12, weight: NT.strong))
                         Text("（複数選択可）").font(.system(size: 10.5))
                     }
                     .foregroundColor(NT.ink2)
@@ -1838,7 +1838,7 @@ struct NPHRNewReservationView: View {
                         ForEach(keywords, id: \.self) { k in
                             let on = tags.contains(k)
                             Button { if on { tags.removeAll { $0 == k } } else { tags.append(k) } } label: {
-                                Text(k).font(.system(size: 12.5, weight: .heavy)).foregroundColor(on ? .white : NT.ink)
+                                Text(k).font(.system(size: 12.5, weight: NT.strong)).foregroundColor(on ? .white : NT.ink)
                                     .multilineTextAlignment(.center).lineLimit(2).minimumScaleFactor(0.8)
                                     .padding(.horizontal, 4).frame(maxWidth: .infinity).frame(minHeight: 44)
                                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? NT.purple : Color.white))
@@ -1887,18 +1887,18 @@ struct NPHRNewReservationView: View {
             HStack {
                 HStack(spacing: 4) {
                     Image(systemName: "clock").font(.system(size: 12, weight: .bold))
-                    Text("確保時間").font(.system(size: 12, weight: .heavy))
+                    Text("確保時間").font(.system(size: 12, weight: NT.strong))
                 }
                 .foregroundColor(NT.ink2)
                 Spacer()
                 if stay != defaultStay {
                     Button { stayCustom = nil } label: {
-                        Text("元に戻す（\(NRWMath.stayLabel(defaultStay))）").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.purple)
+                        Text("元に戻す（\(NRWMath.stayLabel(defaultStay))）").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.purple)
                     }
                     .buttonStyle(.plain)
                 }
             }
-            Text(NRWMath.stayLabel(stay)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit().frame(maxWidth: .infinity)
+            Text(NRWMath.stayLabel(stay)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit().frame(maxWidth: .infinity)
             HStack(spacing: 6) {
                 ForEach([-30, -5, 5, 30], id: \.self) { d in
                     let disabled = (d < 0 && stay <= 15) || (d > 0 && stay >= 720)
@@ -1906,7 +1906,7 @@ struct NPHRNewReservationView: View {
                         let next = Swift.min(720, Swift.max(15, stay + d))
                         stayCustom = next == defaultStay ? nil : next
                     } label: {
-                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink2)
+                        Text(d > 0 ? "+\(d)分" : "\(d)分").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink2)
                             .frame(maxWidth: .infinity).frame(height: 42)
                             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
                             .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -1922,14 +1922,14 @@ struct NPHRNewReservationView: View {
     /// 予約ステータス（来店待ち・仮予約・要連絡。Web の StatusPicker と同じ）
     private var statusPicker: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("予約ステータス").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink2)
+            Text("予約ステータス").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink2)
             HStack(spacing: 6) {
                 ForEach(NRWStatus.allCases, id: \.self) { s in
                     let on = status == s
                     let tone = statusTone(s)
                     Button { status = s } label: {
                         VStack(spacing: 1) {
-                            Text(s.label).font(.system(size: 14, weight: .heavy))
+                            Text(s.label).font(.system(size: 14, weight: NT.strong))
                             Text(s.hint).font(.system(size: 9.5, weight: .semibold)).opacity(0.8).lineLimit(1).minimumScaleFactor(0.7)
                         }
                         .foregroundColor(on ? tone.fg : NT.ink3)
@@ -1983,8 +1983,8 @@ struct NPHRNewReservationView: View {
         let inner = content()
         return VStack(alignment: .leading, spacing: 5) {
             HStack(spacing: 3) {
-                Text(label).font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink2)
-                if required { Text("*").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.danger) }
+                Text(label).font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink2)
+                if required { Text("*").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.danger) }
             }
             inner
         }
@@ -2022,7 +2022,7 @@ struct NPHRNewReservationView: View {
                     if step == 2 { step = 1; problem = nil } else { onClose() }
                 } label: {
                     HStack(spacing: 4) { Image(systemName: "chevron.left"); Text(step == 2 ? "前に戻る" : "やめる") }
-                        .font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink2)
+                        .font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink2)
                         .frame(maxWidth: .infinity).frame(height: 50)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
                         .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NT.line, lineWidth: 1))
@@ -2035,7 +2035,7 @@ struct NPHRNewReservationView: View {
                         if saving { ProgressView().tint(.white) }
                         Text(step == 1 ? "詳細を入力する" : "この内容で登録する").lineLimit(1).minimumScaleFactor(0.8)
                     }
-                    .font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                    .font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 50)
                     .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill((step == 1 ? step1Ready : ready && !saving) ? NT.purple : NT.ink3))
                 }
@@ -2052,7 +2052,7 @@ struct NPHRNewReservationView: View {
     private func summary(_ on: Bool, _ text: String) -> some View {
         HStack(spacing: 6) {
             Circle().fill(on ? NT.purple : NT.line).frame(width: 8, height: 8)
-            Text(text).font(.system(size: 13, weight: .heavy)).foregroundColor(on ? NT.ink : NT.ink3).monospacedDigit().lineLimit(1)
+            Text(text).font(.system(size: 13, weight: NT.strong)).foregroundColor(on ? NT.ink : NT.ink3).monospacedDigit().lineLimit(1)
         }
     }
 
@@ -2099,11 +2099,11 @@ struct NPHRCountSheet: View {
     var body: some View {
         let value = Int(text) ?? initial
         VStack(spacing: 14) {
-            Text(label).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).padding(.top, 18)
-            Text("\(text.isEmpty ? String(initial) : text)名").font(.system(size: 40, weight: .heavy)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
+            Text(label).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).padding(.top, 18)
+            Text("\(text.isEmpty ? String(initial) : text)名").font(.system(size: 40, weight: NT.strong)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
             NPHKeypad(text: $text, maxLength: 3)
             Button { onDone(Swift.min(999, Swift.max(allowZero ? 0 : 1, value))) } label: {
-                Text("決定").font(.system(size: 17, weight: .heavy)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 52)
+                Text("決定").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 52)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.purple))
             }
             .buttonStyle(PressableStyle())

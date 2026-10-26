@@ -202,7 +202,7 @@ struct NativePhoneAnnouncementsView: View {
                     }
                 }
                 HStack(alignment: .top, spacing: 8) {
-                    Text(a.title).font(.system(size: 16, weight: a.isRead ? .bold : .heavy)).foregroundColor(NT.ink)
+                    Text(a.title).font(.system(size: 16, weight: a.isRead ? .bold : NT.strong)).foregroundColor(NT.ink)
                         .multilineTextAlignment(.leading).lineLimit(2)
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.right").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3).padding(.top, 4)
@@ -249,7 +249,7 @@ struct NPOAnnDetailView: View {
                 VStack(alignment: .leading, spacing: 14) {
                     VStack(alignment: .leading, spacing: 10) {
                         if item.isImportant { NWKBadge(text: "⚠︎ 重要", color: NT.danger) }
-                        Text(item.title).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink)
+                        Text(item.title).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink)
                             .fixedSize(horizontal: false, vertical: true)
                         VStack(alignment: .leading, spacing: 4) {
                             metaLine("building.2", "対象：\(item.storeLabel)")

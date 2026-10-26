@@ -195,7 +195,7 @@ struct NPPYRunView: View {
                 NWKBadge(text: NPPYFmt.runType[run.runType] ?? run.runType, color: NPPYFmt.runTypeColor(run.runType))
                 NWKBadge(text: NPPYFmt.runStatus[run.status] ?? run.status, color: NPPYFmt.runStatusColor(run.status))
             }
-            Text(run.title).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
+            Text(run.title).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).fixedSize(horizontal: false, vertical: true)
             Text(run.description).font(.system(size: 13.5)).foregroundColor(NT.ink2).fixedSize(horizontal: false, vertical: true)
             NPPYStatusSteps(status: run.status)
         }
@@ -235,7 +235,7 @@ struct NPPYRunView: View {
     private func bonusList(_ items: [NPPYBonusItem], total: Double) -> some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("支給額（\(items.count)人）").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("支給額（\(items.count)人）").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
             }
             .padding(.horizontal, 14).padding(.vertical, 12)
@@ -248,14 +248,14 @@ struct NPPYRunView: View {
                     HStack {
                         Text(i.profileName).font(.system(size: 15.5, weight: .bold)).foregroundColor(NT.ink).lineLimit(1)
                         Spacer(minLength: 8)
-                        Text(NPPYFmt.yen(i.amount)).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NPPYFmt.yen(i.amount)).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                     .padding(.horizontal, 14).padding(.vertical, 12)
                 }
                 HStack {
-                    Text("合計").font(.system(size: 15, weight: .heavy))
+                    Text("合計").font(.system(size: 15, weight: NT.strong))
                     Spacer()
-                    Text(NPPYFmt.yen(total)).font(.system(size: 19, weight: .heavy)).monospacedDigit()
+                    Text(NPPYFmt.yen(total)).font(.system(size: 19, weight: NT.strong)).monospacedDigit()
                 }
                 .foregroundColor(NT.ink)
                 .padding(.horizontal, 14).padding(.vertical, 14)
@@ -283,10 +283,10 @@ struct NPPYRunView: View {
     private func totalsCard(_ t: NPPYTotals, count: Int) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline) {
-                Text("合計（\(count)人）").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text("合計（\(count)人）").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer(minLength: 6)
                 Text("総支給").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                Text(NPPYFmt.yen(t.grossTotal)).font(.system(size: 24, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NPPYFmt.yen(t.grossTotal)).font(.system(size: 24, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                     .lineLimit(1).minimumScaleFactor(0.6)
             }
             NPPYChips(pairs: t.timePairs)
@@ -357,12 +357,12 @@ struct NPPYStatusSteps: View {
             ZStack {
                 Circle().fill(done ? NT.purple : NT.page).frame(width: 22, height: 22)
                 if i < index {
-                    Image(systemName: "checkmark").font(.system(size: 10, weight: .heavy)).foregroundColor(.white)
+                    Image(systemName: "checkmark").font(.system(size: 10, weight: NT.strong)).foregroundColor(.white)
                 } else {
-                    Text("\(i + 1)").font(.system(size: 11, weight: .heavy)).foregroundColor(done ? .white : NT.ink3)
+                    Text("\(i + 1)").font(.system(size: 11, weight: NT.strong)).foregroundColor(done ? .white : NT.ink3)
                 }
             }
-            Text(label).font(.system(size: 12.5, weight: i == index ? Font.Weight.heavy : Font.Weight.semibold)).foregroundColor(done ? NT.ink : NT.ink3)
+            Text(label).font(.system(size: 12.5, weight: i == index ? NT.strong : Font.Weight.semibold)).foregroundColor(done ? NT.ink : NT.ink3)
         }
     }
 
@@ -384,9 +384,9 @@ struct NPPYItemCard: View {
                     HStack(spacing: 8) {
                         Image(systemName: open ? "chevron.down" : "chevron.right")
                             .font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3).frame(width: 14)
-                        Text(item.profileName).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                        Text(item.profileName).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                         Spacer(minLength: 6)
-                        Text(NPPYFmt.yen(item.grossTotal)).font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(NPPYFmt.yen(item.grossTotal)).font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                             .lineLimit(1).minimumScaleFactor(0.7)
                     }
                     NPPYChips(pairs: item.timePairs)
@@ -420,9 +420,9 @@ struct NPPYItemCard: View {
                 }
                 Rectangle().fill(NT.line).frame(height: 1).padding(.vertical, 4)
                 HStack {
-                    Text("総支給").font(.system(size: 14.5, weight: .heavy))
+                    Text("総支給").font(.system(size: 14.5, weight: NT.strong))
                     Spacer()
-                    Text(NPPYFmt.yen(item.grossTotal)).font(.system(size: 15, weight: .heavy)).monospacedDigit()
+                    Text(NPPYFmt.yen(item.grossTotal)).font(.system(size: 15, weight: NT.strong)).monospacedDigit()
                 }
                 .foregroundColor(NT.ink)
             }
@@ -489,7 +489,7 @@ struct NPPYLineView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(line.text)
-                .font(.system(size: 13.5, weight: line.strong == true ? Font.Weight.heavy : Font.Weight.regular))
+                .font(.system(size: 13.5, weight: line.strong == true ? NT.strong : Font.Weight.regular))
                 .foregroundColor(line.strong == true ? NT.ink : NT.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             ForEach(Array((line.sub ?? []).enumerated()), id: \.offset) { _, s in
@@ -508,7 +508,7 @@ struct NPPYSnapshotCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
-            Text("この計算で使ったルール（承認時点で固定）").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+            Text("この計算で使ったルール（承認時点で固定）").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
             if let g = s.generatedLabel { Text(g).font(.system(size: 12)).foregroundColor(NT.ink3) }
             if let note = s.note { Text(note).font(.system(size: 13)).foregroundColor(NT.ink2).fixedSize(horizontal: false, vertical: true) }
             if s.payrollRules.isEmpty && s.commissionRules.isEmpty && s.note == nil {
@@ -519,7 +519,7 @@ struct NPPYSnapshotCard: View {
                     HStack {
                         Text(r.staff).font(.system(size: 14.5, weight: .bold)).foregroundColor(NT.ink)
                         Spacer()
-                        Text("\(r.payType) \(r.base)").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text("\(r.payType) \(r.base)").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                     Text("残業 \(r.overtime)・深夜 \(r.night)・休日 \(r.holiday)・交通費 \(r.commute)").font(.system(size: 12)).foregroundColor(NT.ink2)
                     Text(r.period).font(.system(size: 11.5)).foregroundColor(NT.ink3)
@@ -533,7 +533,7 @@ struct NPPYSnapshotCard: View {
                     HStack {
                         Text(r.name).font(.system(size: 14.5, weight: .bold)).foregroundColor(NT.ink)
                         Spacer()
-                        Text(r.value).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                        Text(r.value).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
                     }
                     Text("\(r.target)・\(r.method)").font(.system(size: 12)).foregroundColor(NT.ink2)
                     Text(r.period).font(.system(size: 11.5)).foregroundColor(NT.ink3)
@@ -581,9 +581,9 @@ struct NPPYPayslipCard: View {
                         }
                         Rectangle().fill(NT.ink.opacity(0.25)).frame(height: 1.5).padding(.vertical, 2)
                         HStack {
-                            Text("支給合計").font(.system(size: 14.5, weight: .heavy))
+                            Text("支給合計").font(.system(size: 14.5, weight: NT.strong))
                             Spacer()
-                            Text(NPPYFmt.yen(p.grossTotal)).font(.system(size: 14.5, weight: .heavy)).monospacedDigit()
+                            Text(NPPYFmt.yen(p.grossTotal)).font(.system(size: 14.5, weight: NT.strong)).monospacedDigit()
                         }
                         .foregroundColor(NT.ink).padding(.vertical, 8)
                     }
@@ -609,7 +609,7 @@ struct NPPYPayslipCard: View {
     private var head: some View {
         HStack(alignment: .top, spacing: 10) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(p.runType == "bonus" ? "賞与明細書" : "給与明細書").font(.system(size: 19, weight: .heavy)).foregroundColor(NT.ink)
+                Text(p.runType == "bonus" ? "賞与明細書" : "給与明細書").font(.system(size: 19, weight: NT.strong)).foregroundColor(NT.ink)
                 Text(p.runTitle).font(.system(size: 12.5, weight: .semibold)).foregroundColor(NT.ink2)
                 Text(p.periodLabel).font(.system(size: 12)).foregroundColor(NT.ink3)
             }
@@ -641,7 +641,7 @@ struct NPPYPayslipCard: View {
         HStack {
             Text(label).font(.system(size: 14, weight: highlight ? Font.Weight.bold : Font.Weight.regular)).foregroundColor(highlight ? NT.purpleDeep : NT.ink2)
             Spacer()
-            Text(NPPYFmt.yen(value)).font(.system(size: 14, weight: highlight ? Font.Weight.heavy : Font.Weight.regular)).foregroundColor(highlight ? NT.purpleDeep : NT.ink).monospacedDigit()
+            Text(NPPYFmt.yen(value)).font(.system(size: 14, weight: highlight ? NT.strong : Font.Weight.regular)).foregroundColor(highlight ? NT.purpleDeep : NT.ink).monospacedDigit()
         }
         .padding(.vertical, 7)
     }
@@ -650,7 +650,7 @@ struct NPPYPayslipCard: View {
         HStack(alignment: .firstTextBaseline) {
             Text(label).font(.system(size: 14, weight: .semibold))
             Spacer(minLength: 6)
-            Text(NPPYFmt.yen(value)).font(.system(size: 28, weight: .heavy)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
+            Text(NPPYFmt.yen(value)).font(.system(size: 28, weight: NT.strong)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.6)
         }
         .foregroundColor(.white)
         .padding(16)

@@ -177,7 +177,7 @@ struct NativePhoneEmployeeListView: View {
 
     private func chip(_ text: String, on: Bool, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text(text).font(.system(size: 13, weight: .heavy)).foregroundColor(on ? Color.white : NT.ink2).lineLimit(1)
+            Text(text).font(.system(size: 13, weight: NT.strong)).foregroundColor(on ? Color.white : NT.ink2).lineLimit(1)
                 .padding(.horizontal, 13).frame(height: 34)
                 .background(Capsule().fill(on ? NT.purple : Color.white))
                 .overlay(Capsule().stroke(on ? Color.clear : NT.line, lineWidth: 1))
@@ -218,7 +218,7 @@ struct NativePhoneEmployeeListView: View {
             NPWAvatar(name: r.name, size: 40, color: r.status == "active" ? NT.purple : NT.ink3)
             VStack(alignment: .leading, spacing: 3) {
                 HStack(spacing: 6) {
-                    Text(r.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                    Text(r.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                     if r.status != "active" { NPBadge(text: r.statusLabel, color: NEMFmt.statusColor(r.status)) }
                 }
                 if !sub.isEmpty { Text(sub).font(.system(size: 12)).foregroundColor(NT.ink2).lineLimit(1) }
@@ -321,7 +321,7 @@ struct NativePhoneEmployeeDetailView: View {
             HStack(spacing: 14) {
                 NPWAvatar(name: name, size: 54, color: b.status == "active" ? NT.purple : NT.ink3)
                 VStack(alignment: .leading, spacing: 4) {
-                    Text(name).font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                    Text(name).font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                     if !b.legalNameKana.isEmpty {
                         Text(b.legalNameKana).font(.system(size: 12.5)).foregroundColor(NT.ink3).lineLimit(1)
                     }
@@ -368,13 +368,13 @@ struct NativePhoneEmployeeDetailView: View {
 
     private func confidentialCard(_ c: NEMConfidential) -> some View {
         card("機密情報", note: "給与閲覧権限を持つロールにだけ出ます。口座番号は末尾4桁だけ保存します。", edit: canEdit ? .confidential : nil) {
-            Text("銀行振込").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink3).padding(.top, 4)
+            Text("銀行振込").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink3).padding(.top, 4)
             infoRows([
                 ("銀行・支店", [c.bank.bank, c.bank.branch].filter { !$0.isEmpty }.joined(separator: " ")),
                 ("種別・口座", [c.bank.type, c.bank.last4.isEmpty ? "" : "末尾 \(c.bank.last4)"].filter { !$0.isEmpty }.joined(separator: " ・ ")),
                 ("口座名義", c.bank.holder),
             ])
-            Text("緊急連絡先").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.ink3).padding(.top, 10)
+            Text("緊急連絡先").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.ink3).padding(.top, 10)
             NPWInfoRow(label: "氏名・続柄", value: [c.emergency.name, c.emergency.relation.isEmpty ? "" : "（\(c.emergency.relation)）"].joined())
             NPWDivider()
             phoneRow(c.emergency.phone)
@@ -433,13 +433,13 @@ struct NativePhoneEmployeeDetailView: View {
         let inner = content()
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .center, spacing: 8) {
-                Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer(minLength: 6)
                 if let edit {
                     Button { editing = edit } label: {
                         HStack(spacing: 4) {
                             Image(systemName: "pencil").font(.system(size: 12, weight: .bold))
-                            Text("編集").font(.system(size: 13, weight: .heavy))
+                            Text("編集").font(.system(size: 13, weight: NT.strong))
                         }
                         .foregroundColor(NT.purple)
                         .padding(.horizontal, 12).frame(height: 32)

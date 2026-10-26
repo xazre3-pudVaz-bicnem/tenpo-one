@@ -48,7 +48,7 @@ struct NativeBrandPill: View {
 
     var body: some View {
         Text("TENPO ONE")
-            .font(.system(size: size, weight: .black))
+            .font(.system(size: size, weight: NT.strongest))
             .tracking(0.6)
             .foregroundColor(NLStyle.navy)
             .padding(.horizontal, size * 1.05)
@@ -69,7 +69,7 @@ struct NativeCatchTitle: View {
             Text(first).foregroundColor(.white)
             Text(second).foregroundColor(NLStyle.accent)
         }
-        .font(.system(size: size, weight: .black))
+        .font(.system(size: size, weight: NT.strongest))
         .multilineTextAlignment(alignment == .center ? .center : .leading)
         .lineLimit(1)
         .minimumScaleFactor(0.6)
@@ -87,7 +87,7 @@ struct NativeBootSplash: View {
                     .clipShape(RoundedRectangle(cornerRadius: AppConfig.isPad ? 26 : 22, style: .continuous))
                     .shadow(color: .black.opacity(0.3), radius: 16, y: 8)
                 Text("TENPO ONE")
-                    .font(.system(size: AppConfig.isPad ? 40 : 32, weight: .black))
+                    .font(.system(size: AppConfig.isPad ? 40 : 32, weight: NT.strongest))
                     .foregroundColor(.white)
                 ProgressView().tint(.white).padding(.top, 6)
             }

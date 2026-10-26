@@ -30,7 +30,7 @@ struct NativeLedgerWeekView: View {
             if let p = payload {
                 VStack(alignment: .leading, spacing: 10) {
                     HStack(alignment: .firstTextBaseline) {
-                        Text("週間").font(.system(size: 18, weight: .heavy)).foregroundColor(NLColor.navy)
+                        Text("週間").font(.system(size: 18, weight: NT.strong)).foregroundColor(NLColor.navy)
                         Text("Week").font(.system(size: 11)).foregroundColor(NLColor.muted)
                         Text("\(md(p.weekDates.first)) 〜 \(md(p.weekDates.last))").font(.system(size: 13)).foregroundColor(NLColor.muted)
                         Spacer()

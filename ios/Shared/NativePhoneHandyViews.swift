@@ -27,7 +27,7 @@ struct NPHTopBar<Trailing: View>: View {
             .buttonStyle(PressableStyle())
             Spacer(minLength: 4)
             VStack(spacing: 1) {
-                Text(title).font(.system(size: 17, weight: .heavy)).foregroundColor(.white).lineLimit(1)
+                Text(title).font(.system(size: 17, weight: NT.strong)).foregroundColor(.white).lineLimit(1)
                 if !subtitle.isEmpty { Text(subtitle).font(.system(size: 11, weight: .semibold)).foregroundColor(.white.opacity(0.7)).lineLimit(1) }
             }
             .layoutPriority(1)
@@ -127,7 +127,7 @@ struct NativePhoneTableView: View {
             Image(systemName: "fork.knife").font(.system(size: 30, weight: .bold)).foregroundColor(NT.ink3)
             Text("この卓にはまだ伝票がありません").font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink2)
             Button(action: onSetup) {
-                Text("お客様情報を入れて開始").font(.system(size: 16, weight: .heavy)).foregroundColor(.white)
+                Text("お客様情報を入れて開始").font(.system(size: 16, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 52)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.purple))
             }
@@ -143,7 +143,7 @@ struct NativePhoneTableView: View {
         return HStack(spacing: 10) {
             Image(systemName: checkout ? "yensign.circle.fill" : "bell.fill").font(.system(size: 22, weight: .bold)).foregroundColor(NFColor.callDeep)
             VStack(alignment: .leading, spacing: 2) {
-                Text(checkout ? "お会計希望" : "呼び出し").font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.callInk)
+                Text(checkout ? "お会計希望" : "呼び出し").font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.callInk)
                 Text("\(min)分前\(c.note.map { "・\($0)" } ?? "")").font(.system(size: 12)).foregroundColor(NFColor.callInk.opacity(0.8)).lineLimit(2)
             }
             Spacer(minLength: 6)
@@ -180,7 +180,7 @@ struct NativePhoneTableView: View {
             HStack(alignment: .center, spacing: 8) {
                 Text("伝票 #\(s.orderNo)").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3)
                 Spacer()
-                Text(yen(s.total)).font(.system(size: 22, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(yen(s.total)).font(.system(size: 22, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             .padding(.horizontal, 16).padding(.top, 14)
             HStack(spacing: 8) {
@@ -218,7 +218,7 @@ struct NativePhoneTableView: View {
     private func itemRow(_ i: NPHItem, slip: NPHSlip) -> some View {
         let cancellable = model.canCancel(i)
         return HStack(alignment: .center, spacing: 10) {
-            Text("\(i.quantity)").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purpleDeep)
+            Text("\(i.quantity)").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purpleDeep)
                 .frame(minWidth: 28, minHeight: 28).background(Circle().fill(NT.lilac))
             VStack(alignment: .leading, spacing: 2) {
                 Text(i.name).font(.system(size: 15, weight: .semibold)).foregroundColor(NT.ink).lineLimit(2)
@@ -235,7 +235,7 @@ struct NativePhoneTableView: View {
                     Task { await model.act(["type": "handyCancelItem", "orderId": slip.id, "orderItemId": i.id], key: "cancel:\(i.id)", done: "「\(i.name)」を1つ取り消しました") }
                 } label: {
                     VStack(spacing: 0) {
-                        Image(systemName: "minus").font(.system(size: 13, weight: .heavy))
+                        Image(systemName: "minus").font(.system(size: 13, weight: NT.strong))
                         Text("\(model.cancelLeft(i) / 60):\(String(format: "%02d", model.cancelLeft(i) % 60))").font(.system(size: 9, weight: .bold)).monospacedDigit()
                     }
                     .foregroundColor(NT.danger).frame(width: 44, height: 40)
@@ -271,7 +271,7 @@ struct NativePhoneTableView: View {
         } label: {
             HStack(spacing: 8) {
                 if model.busy == "open" { ProgressView().tint(.white) } else { Image(systemName: "plus.circle.fill").font(.system(size: 20, weight: .bold)) }
-                Text((p.slips ?? []).isEmpty ? "お客様情報を入れて開始" : "注文する").font(.system(size: 18, weight: .heavy))
+                Text((p.slips ?? []).isEmpty ? "お客様情報を入れて開始" : "注文する").font(.system(size: 18, weight: NT.strong))
             }
             .foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 58)
             .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.purple))
@@ -294,14 +294,14 @@ struct NPHGuestSheet: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text("人数").font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).padding(.top, 18)
-            Text("\(text.isEmpty ? String(initial) : text)名").font(.system(size: 40, weight: .heavy)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
+            Text("人数").font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).padding(.top, 18)
+            Text("\(text.isEmpty ? String(initial) : text)名").font(.system(size: 40, weight: NT.strong)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
             NPHKeypad(text: $text, maxLength: 3)
             Button {
                 let n = Int(text) ?? initial
                 if n >= 1 { onDone(n) }
             } label: {
-                Text("決定").font(.system(size: 17, weight: .heavy)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 52)
+                Text("決定").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 52)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.purple))
             }
             .buttonStyle(PressableStyle())
@@ -439,11 +439,11 @@ struct NativePhoneOrderView: View {
                     } label: {
                         HStack(spacing: 0) {
                             Rectangle().fill(on ? NT.purple : Color.clear).frame(width: 4)
-                            Text(c.name).font(.system(size: 13.5, weight: on ? .heavy : .semibold)).foregroundColor(on ? NT.purpleDeep : NT.ink2)
+                            Text(c.name).font(.system(size: 13.5, weight: on ? NT.strong : .semibold)).foregroundColor(on ? NT.purpleDeep : NT.ink2)
                                 .multilineTextAlignment(.leading).lineLimit(3)
                                 .frame(maxWidth: .infinity, alignment: .leading).padding(.leading, 9).padding(.vertical, 14)
                             if n > 0 {
-                                Text("\(n)").font(.system(size: 11, weight: .heavy)).foregroundColor(.white)
+                                Text("\(n)").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white)
                                     .frame(minWidth: 20, minHeight: 20).background(Circle().fill(NT.purple)).padding(.trailing, 6)
                             }
                         }
@@ -469,7 +469,7 @@ struct NativePhoneOrderView: View {
                         Button { amountTarget = AmountTarget(item: nil, category: c) } label: {
                             VStack(spacing: 4) {
                                 Image(systemName: "square.and.pencil").font(.system(size: 18, weight: .bold))
-                                Text("その他").font(.system(size: 14, weight: .heavy))
+                                Text("その他").font(.system(size: 14, weight: NT.strong))
                                 Text("金額入力").font(.system(size: 10.5)).foregroundColor(NT.ink3)
                             }
                             .foregroundColor(NT.purpleDeep).frame(maxWidth: .infinity).frame(height: 92)
@@ -500,10 +500,10 @@ struct NativePhoneOrderView: View {
                     .multilineTextAlignment(.leading).lineLimit(3).frame(maxWidth: .infinity, alignment: .leading)
                 Spacer(minLength: 0)
                 HStack {
-                    if i.isSoldOut { Text("売切").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.danger) }
-                    else if i.offHours ?? false { Text("時間外").font(.system(size: 12, weight: .heavy)).foregroundColor(NT.warn) }
+                    if i.isSoldOut { Text("売切").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.danger) }
+                    else if i.offHours ?? false { Text("時間外").font(.system(size: 12, weight: NT.strong)).foregroundColor(NT.warn) }
                     else if model.isOpenPrice(i, in: c) { Text("金額入力").font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3) }
-                    else { Text(yen(i.price)).font(.system(size: 14, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit() }
+                    else { Text(yen(i.price)).font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit() }
                     Spacer(minLength: 0)
                     if !model.groups(i).isEmpty { Image(systemName: "slider.horizontal.3").font(.system(size: 11, weight: .bold)).foregroundColor(NT.ink3) }
                 }
@@ -513,7 +513,7 @@ struct NativePhoneOrderView: View {
             .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(n > 0 ? NT.purple : NT.line, lineWidth: n > 0 ? 1.5 : 1))
             .overlay(alignment: .topTrailing) {
                 if n > 0 {
-                    Text("\(n)").font(.system(size: 12, weight: .heavy)).foregroundColor(.white)
+                    Text("\(n)").font(.system(size: 12, weight: NT.strong)).foregroundColor(.white)
                         .frame(minWidth: 24, minHeight: 24).background(Circle().fill(NT.purple)).offset(x: 6, y: -6)
                 }
             }
@@ -525,11 +525,11 @@ struct NativePhoneOrderView: View {
     private var cartBar: some View {
         Button { confirmOpen = true } label: {
             HStack(spacing: 10) {
-                Text("\(model.count)").font(.system(size: 15, weight: .heavy)).foregroundColor(NT.purple)
+                Text("\(model.count)").font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.purple)
                     .frame(minWidth: 30, minHeight: 30).background(Circle().fill(Color.white))
-                Text("注文を確認").font(.system(size: 18, weight: .heavy))
+                Text("注文を確認").font(.system(size: 18, weight: NT.strong))
                 Spacer()
-                Text(NT.yen(model.total)).font(.system(size: 18, weight: .heavy)).monospacedDigit()
+                Text(NT.yen(model.total)).font(.system(size: 18, weight: NT.strong)).monospacedDigit()
                 Image(systemName: "chevron.right").font(.system(size: 15, weight: .bold))
             }
             .foregroundColor(.white).padding(.horizontal, 16).frame(height: 58)
@@ -558,15 +558,15 @@ struct NPHOptionSheet: View {
 
     var body: some View {
         VStack(spacing: 0) {
-            Text(item.name).font(.system(size: 17, weight: .heavy)).foregroundColor(NT.ink).padding(.top, 20).padding(.horizontal, 18).lineLimit(2)
+            Text(item.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(NT.ink).padding(.top, 20).padding(.horizontal, 18).lineLimit(2)
             ScrollView {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(groups) { g in
                         VStack(alignment: .leading, spacing: 8) {
                             HStack(spacing: 6) {
-                                Text(g.name).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                                Text(g.name).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                                 if g.isRequired || g.minSelect > 0 {
-                                    Text("必須").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2)
+                                    Text("必須").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2)
                                         .background(Capsule().fill(NT.danger))
                                 }
                                 if g.maxSelect > 1 { Text("\(g.maxSelect)つまで").font(.system(size: 12)).foregroundColor(NT.ink3) }
@@ -597,7 +597,7 @@ struct NPHOptionSheet: View {
                 guard firstProblem == nil else { return }
                 onDone(groups.flatMap { g in g.items.filter { picked[g.id]?.contains($0.id) ?? false }.map(\.id) })
             } label: {
-                Text(firstProblem ?? "カートに入れる").font(.system(size: 17, weight: .heavy)).foregroundColor(.white)
+                Text(firstProblem ?? "カートに入れる").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                     .frame(maxWidth: .infinity).frame(height: 54)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(firstProblem == nil ? NT.purple : NT.ink3))
             }
@@ -626,8 +626,8 @@ struct NPHAmountSheet: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            Text(title).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2).padding(.top, 20).padding(.horizontal, 18)
-            Text(NT.yen(Int(text) ?? 0)).font(.system(size: 40, weight: .heavy)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
+            Text(title).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2).padding(.top, 20).padding(.horizontal, 18)
+            Text(NT.yen(Int(text) ?? 0)).font(.system(size: 40, weight: NT.strong)).foregroundColor(text.isEmpty ? NT.ink3 : NT.ink).monospacedDigit()
             if askMemo {
                 TextField("内容（例：持ち込み料）", text: $memo)
                     .font(.system(size: 16)).padding(.horizontal, 14).frame(height: 48)
@@ -639,7 +639,7 @@ struct NPHAmountSheet: View {
                 guard let n = Int(text), n >= 0 else { return }
                 onDone(n, memo)
             } label: {
-                Text("カートに入れる").font(.system(size: 17, weight: .heavy)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 54)
+                Text("カートに入れる").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 54)
                     .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(text.isEmpty ? NT.ink3 : NT.purple))
             }
             .buttonStyle(PressableStyle())
@@ -661,7 +661,7 @@ struct NPHConfirmSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                Text("注文の確認").font(.system(size: 18, weight: .heavy)).foregroundColor(NT.ink)
+                Text("注文の確認").font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 Text("\(model.count)点 \(NT.yen(model.total))").font(.system(size: 15, weight: .bold)).foregroundColor(NT.ink2).monospacedDigit()
             }
@@ -689,7 +689,7 @@ struct NPHConfirmSheet: View {
                     if model.sending { ProgressView().tint(.white) } else { Image(systemName: "paperplane.fill") }
                     Text(model.sending ? "送信中…" : "注文を送信（厨房へ）")
                 }
-                .font(.system(size: 18, weight: .heavy)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 58)
+                .font(.system(size: 18, weight: NT.strong)).foregroundColor(.white).frame(maxWidth: .infinity).frame(height: 58)
                 .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(model.cart.isEmpty ? NT.ink3 : NT.purple))
             }
             .buttonStyle(PressableStyle())
@@ -712,7 +712,7 @@ struct NPHConfirmSheet: View {
                     if let m = l.memo { Text("※ \(m)").font(.system(size: 12, weight: .semibold)).foregroundColor(NT.warn).lineLimit(2) }
                 }
                 Spacer(minLength: 4)
-                Text(NT.yen(l.unitPrice * l.quantity)).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink).monospacedDigit()
+                Text(NT.yen(l.unitPrice * l.quantity)).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink).monospacedDigit()
             }
             HStack(spacing: 8) {
                 if l.custom == nil {
@@ -737,7 +737,7 @@ struct NPHConfirmSheet: View {
                 Image(systemName: l.quantity == 1 ? "trash" : "minus").font(.system(size: 14, weight: .bold))
                     .foregroundColor(l.quantity == 1 ? NT.danger : NT.ink).frame(width: 42, height: 36)
             }
-            Text("\(l.quantity)").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).frame(minWidth: 30).monospacedDigit()
+            Text("\(l.quantity)").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).frame(minWidth: 30).monospacedDigit()
             Button { model.change(l.key, by: 1) } label: {
                 Image(systemName: "plus").font(.system(size: 14, weight: .bold)).foregroundColor(NT.ink).frame(width: 42, height: 36)
             }

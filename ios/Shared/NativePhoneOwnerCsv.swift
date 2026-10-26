@@ -108,7 +108,7 @@ struct NPOCsvButton: View {
                 }
                 .foregroundColor(NT.purple).frame(width: 30)
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(title).font(.system(size: 14.5, weight: .heavy)).foregroundColor(NT.ink)
+                    Text(title).font(.system(size: 14.5, weight: NT.strong)).foregroundColor(NT.ink)
                     if !sub.isEmpty { Text(sub).font(.system(size: 11.5)).foregroundColor(NT.ink3).lineLimit(2) }
                 }
                 Spacer(minLength: 4)

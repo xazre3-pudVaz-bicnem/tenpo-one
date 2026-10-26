@@ -333,7 +333,7 @@ struct NCCreateSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("顧客を登録").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("顧客を登録").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 Button { onDone(nil) } label: { Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink2).frame(width: 36, height: 36) }
             }.padding(20)

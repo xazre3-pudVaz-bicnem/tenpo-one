@@ -87,7 +87,7 @@ struct NativeCustomerDetailView: View {
         return VStack(alignment: .leading, spacing: 14) {
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 8) {
-                    Text(c.name).font(.system(size: 24, weight: .heavy)).foregroundColor(NFColor.navy)
+                    Text(c.name).font(.system(size: 24, weight: NT.strong)).foregroundColor(NFColor.navy)
                     if c.anonymized { NPBadge(text: "匿名化済み", color: NFColor.ink3) }
                 }
                 Text("登録日 \(NPDate.slash(NNDateOnly.jst(c.createdAt)))\(c.nameKana.map { "｜\($0)" } ?? "")").font(.system(size: 13)).foregroundColor(NFColor.ink3)
@@ -122,7 +122,7 @@ struct NativeCustomerDetailView: View {
                         HStack(alignment: .bottom) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("ポイント残高").font(.system(size: 11.5, weight: .bold)).foregroundColor(NFColor.ink3)
-                                (Text("\(c.pointBalance)").font(.system(size: 28, weight: .heavy)).foregroundColor(NFColor.royal)
+                                (Text("\(c.pointBalance)").font(.system(size: 28, weight: NT.strong)).foregroundColor(NFColor.royal)
                                  + Text(" pt").font(.system(size: 14, weight: .medium)).foregroundColor(NFColor.ink3)).monospacedDigit()
                             }
                             Spacer()
@@ -194,11 +194,11 @@ struct NativeCustomerDetailView: View {
                         HStack(alignment: .top) {
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("実績LTV（累計利用額・返金控除後）").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
-                                Text(NT.yen(p.ltv.actual)).font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.royal)
+                                Text(NT.yen(p.ltv.actual)).font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.royal)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                             VStack(alignment: .leading, spacing: 2) {
                                 Text("12ヶ月予測LTV（参考値）").font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.ink3)
-                                Text(p.ltv.projected12m.map { NT.yen($0) } ?? "算出中").font(.system(size: 22, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.navy)
+                                Text(p.ltv.projected12m.map { NT.yen($0) } ?? "算出中").font(.system(size: 22, weight: NT.strong)).monospacedDigit().foregroundColor(NFColor.navy)
                             }.frame(maxWidth: .infinity, alignment: .leading)
                         }
                         Text(p.ltv.projected12m == nil
@@ -372,7 +372,7 @@ struct NativeCustomerDetailView: View {
     private func card<C: View>(_ title: String, action: (String, () -> Void)? = nil, @ViewBuilder _ c: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 if let action { Button(action.0) { action.1() }.font(.system(size: 13, weight: .bold)) }
             }
@@ -393,7 +393,7 @@ struct NativeCustomerDetailView: View {
     private func stat(_ label: String, _ value: String, tone: Color = NFColor.navy, sub: String? = nil) -> some View {
         VStack(alignment: .leading, spacing: 3) {
             Text(label).font(.system(size: 11.5, weight: .bold)).foregroundColor(NFColor.ink3)
-            Text(value).font(.system(size: 19, weight: .heavy)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.7)
+            Text(value).font(.system(size: 19, weight: NT.strong)).monospacedDigit().foregroundColor(tone).lineLimit(1).minimumScaleFactor(0.7)
             if let sub { Text(sub).font(.system(size: 10.5)).foregroundColor(NFColor.ink3) }
         }
         .frame(maxWidth: .infinity, alignment: .leading).padding(12)
@@ -403,7 +403,7 @@ struct NativeCustomerDetailView: View {
 
     private func table<C: View>(_ title: String, empty: String, count: Int, @ViewBuilder _ rows: () -> C) -> some View {
         VStack(alignment: .leading, spacing: 0) {
-            Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.navy).padding(14)
+            Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.navy).padding(14)
             if count == 0 {
                 Text(empty).font(.system(size: 13)).foregroundColor(NFColor.ink3).frame(maxWidth: .infinity).padding(.vertical, 22)
                     .overlay(alignment: .top) { Rectangle().fill(NFColor.line).frame(height: 1) }
@@ -503,7 +503,7 @@ struct NCAttributesSheet: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack {
-                Text("属性を編集").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("属性を編集").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 Button { onDone(false) } label: { Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink2).frame(width: 36, height: 36) }
             }.padding(20)

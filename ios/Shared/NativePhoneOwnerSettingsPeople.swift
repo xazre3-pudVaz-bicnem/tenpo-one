@@ -45,7 +45,7 @@ struct NPSClerksPage: View {
 
     private func addCard(_ p: NCLPayload) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("担当者を追加").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+            Text("担当者を追加").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
             TextField("担当者の名前（例：山田・田中）", text: $model.newName).font(.system(size: 16)).npocInputBox()
                 .onSubmit { Task { await model.add() } }
             HStack(spacing: 8) {
@@ -93,7 +93,7 @@ struct NPSClerksPage: View {
                     renaming = r
                 } label: {
                     HStack(spacing: 6) {
-                        Text(r.name).font(.system(size: 16, weight: .heavy)).foregroundColor(hidden ? NT.ink3 : NT.ink).strikethrough(hidden, color: NT.ink3).lineLimit(1)
+                        Text(r.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(hidden ? NT.ink3 : NT.ink).strikethrough(hidden, color: NT.ink3).lineLimit(1)
                         if hidden { NPSTag(text: "非表示") }
                         if p.canEdit { Image(systemName: "pencil").font(.system(size: 11)).foregroundColor(NT.ink3) }
                     }
@@ -187,11 +187,11 @@ struct NPSStaffPage: View {
             HStack(alignment: .top, spacing: 12) {
                 ZStack {
                     Circle().fill(r.status == "active" ? NT.lilac : NT.page).frame(width: 40, height: 40)
-                    Text(String(r.displayName.prefix(1))).font(.system(size: 16, weight: .heavy)).foregroundColor(r.status == "active" ? NT.purpleDeep : NT.ink3)
+                    Text(String(r.displayName.prefix(1))).font(.system(size: 16, weight: NT.strong)).foregroundColor(r.status == "active" ? NT.purpleDeep : NT.ink3)
                 }
                 VStack(alignment: .leading, spacing: 4) {
                     HStack(spacing: 6) {
-                        Text(r.displayName).font(.system(size: 15.5, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                        Text(r.displayName).font(.system(size: 15.5, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                         if r.profileId == p.selfProfileId { NPSTag(text: "自分") }
                     }
                     if let k = r.displayNameKana, !k.isEmpty { Text(k).font(.system(size: 11)).foregroundColor(NT.ink3) }
@@ -219,7 +219,7 @@ struct NPSStaffPage: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 8) {
                 Image(systemName: "key.fill").font(.system(size: 16, weight: .bold)).foregroundColor(NT.purple)
-                Text(sec.title).font(.system(size: 15, weight: .heavy)).foregroundColor(NT.ink)
+                Text(sec.title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
                 Button { model.secret = nil } label: { Image(systemName: "xmark").font(.system(size: 13, weight: .bold)).foregroundColor(NT.ink3).frame(width: 32, height: 32) }
                     .buttonStyle(.plain)
@@ -227,7 +227,7 @@ struct NPSStaffPage: View {
             Text("\(sec.who) さんの初期パスワード。本人に安全な方法で伝えてください（閉じると見られません）").font(.system(size: 12)).foregroundColor(NT.ink2)
                 .fixedSize(horizontal: false, vertical: true)
             HStack(spacing: 8) {
-                Text(sec.value).font(.system(size: 20, weight: .heavy, design: .monospaced)).foregroundColor(NT.ink).textSelection(.enabled)
+                Text(sec.value).font(.system(size: 20, weight: NT.strong, design: .monospaced)).foregroundColor(NT.ink).textSelection(.enabled)
                     .padding(.horizontal, 12).frame(height: 44).frame(maxWidth: .infinity, alignment: .leading)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
                 Button {

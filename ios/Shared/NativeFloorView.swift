@@ -350,14 +350,13 @@ struct NativeTableCard: View {
                 // （2026-10-24 20:36 Ronnie「unique な形に」）
                 HStack(spacing: 6) {
                     // 卓の番号は少し大きく（人数も同じ大きさ。2026-10-24 21:48 Ronnie）
+                    // 卓の名前は白い札（箱）に入れない。数字はどれも同じ太さ（semibold）
+                    // （2026-10-27 03:28 Ronnie「table number lai sano box vitra … pardaina、sabai number haru ko font style same」）
                     Text(table.name)
-                        .font(.system(size: 23, weight: .heavy)).monospacedDigit()
-                        // 札と席の印は色をつけない（色は下の帯だけ。2026-10-24 21:09 Ronnie「ここは色いらない」）
+                        .font(.system(size: 23, weight: .semibold)).monospacedDigit()
                         .foregroundColor(empty ? NFColor.ink2 : NFColor.ink)
                         .lineLimit(1)
-                        .padding(.horizontal, 10).frame(height: 36)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Color.white))
-                        .overlay(RoundedRectangle(cornerRadius: 8, style: .continuous).stroke(Color.black.opacity(0.10), lineWidth: 1))
+                        .frame(height: 36)
                         // 卓の名前は切らない（狭いときは印・席の種類のほうを減らす）
                         .fixedSize()
                     // プランと予約の印（飲み放題のグラス・誕生日／記念日のプレート…）。入る数だけ（最大 3）。
@@ -397,7 +396,7 @@ struct NativeTableCard: View {
                             Image(systemName: "person.2.fill").font(.system(size: 20, weight: .semibold)).foregroundColor(NFColor.ink3)
                             Text("\(o.guestCount)")
                         }
-                        .font(.system(size: 23, weight: .heavy)).monospacedDigit().foregroundColor(NFColor.ink)
+                        .font(.system(size: 23, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink)
                         .lineLimit(1).fixedSize()
                     }
                 }
@@ -409,7 +408,7 @@ struct NativeTableCard: View {
                         Image(systemName: info.checkout ? Self.yenSymbol : "bell.fill").font(.system(size: 11, weight: .bold))
                         Text(info.label).lineLimit(1)
                     }
-                    .font(.system(size: 12, weight: .heavy))
+                    .font(.system(size: 12, weight: NT.strong))
                     .foregroundColor(info.late ? Self.callRed : OV.primary)
                 }
                 if let linked {
@@ -417,7 +416,7 @@ struct NativeTableCard: View {
                         Image(systemName: "link").font(.system(size: 10, weight: .bold))
                         Text("連携 \(linked.joined(separator: "+"))").lineLimit(1)
                     }
-                    .font(.system(size: 10, weight: .heavy)).foregroundColor(.white)
+                    .font(.system(size: 10, weight: NT.strong)).foregroundColor(.white)
                     .padding(.horizontal, 6).padding(.vertical, 2)
                     .background(Capsule().fill(NFColor.royal))
                 }
@@ -452,7 +451,7 @@ struct NativeTableCard: View {
                             // 来店の区分：初回（グレー）・リピ N回（青）・常連 N回（黄）。顧客台帳につながっているときだけ
                             if let v = o.visitCount {
                                 let chip: (String, Color, Color) = v >= 3 ? ("常連 \(v)回", NLColor.navy, NLColor.yellow) : v == 2 ? ("リピ 2回", .white, NLColor.blue) : ("初回", NFColor.ink2, Color(hex: 0xE9E9EF))
-                                Text(chip.0).font(.system(size: 11, weight: .heavy)).foregroundColor(chip.1)
+                                Text(chip.0).font(.system(size: 11, weight: NT.strong)).foregroundColor(chip.1)
                                     .padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5, style: .continuous).fill(chip.2))
                             }
                             if let n = o.customerName ?? o.guestName {
@@ -465,7 +464,7 @@ struct NativeTableCard: View {
                     }
                 } else if state == .cleaning || state == .unavailable {
                     Text(state.label)
-                        .font(.system(size: 10.5, weight: .heavy)).foregroundColor(NFColor.label(state))
+                        .font(.system(size: 10.5, weight: NT.strong)).foregroundColor(NFColor.label(state))
                         .padding(.top, 6)
                         .overlay(alignment: .top) { dashedLine }
                         .frame(minHeight: 26, alignment: .leading)
@@ -490,8 +489,8 @@ struct NativeTableCard: View {
                             HStack(alignment: .firstTextBaseline, spacing: 8) {
                                 Spacer(minLength: 4)
                                 Text(o.guestCount > 0 ? "\(NT.yen(Int((Double(o.total) / Double(o.guestCount)).rounded())))/人" : "—/人")
-                                    .font(.system(size: 13, weight: .medium)).monospacedDigit().foregroundColor(NFColor.ink2)
-                                Text(NT.yen(o.total)).font(.system(size: 22, weight: .bold)).monospacedDigit().foregroundColor(NFColor.ink)
+                                    .font(.system(size: 13, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink2)
+                                Text(NT.yen(o.total)).font(.system(size: 22, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink)
                             }
                             .lineLimit(1).minimumScaleFactor(0.7)
                             .padding(.horizontal, 14)
@@ -531,8 +530,8 @@ struct NativeTableCard: View {
                     // （2026-10-27 03:11 Ronnie「wallet・ring・会計待ち same、ring yello、suruma yello paxi rato、¥ mark … same color ko square」）
                     HStack(spacing: 4) {
                         Image(systemName: info.checkout ? Self.yenSymbol : "bell.fill").font(.system(size: 12, weight: .bold))
-                        Text("\(info.count)回").font(.system(size: 12, weight: .heavy)).monospacedDigit()
-                        Text("\(info.minutes)分").font(.system(size: 11, weight: .bold)).monospacedDigit().opacity(0.9)
+                        Text("\(info.count)回").font(.system(size: 12, weight: .semibold)).monospacedDigit()
+                        Text("\(info.minutes)分").font(.system(size: 11, weight: .semibold)).monospacedDigit().opacity(0.9)
                     }
                     .foregroundColor(Self.padCallInk(info))
                     .padding(.horizontal, 9).frame(height: 26)
@@ -700,7 +699,7 @@ struct NativeTableCard: View {
             Spacer(minLength: 4)
             HStack(alignment: .firstTextBaseline, spacing: 4) {
                 Image(systemName: "hourglass").font(.system(size: 15, weight: .semibold))
-                Text(clock).font(.system(size: 24, weight: .heavy)).monospacedDigit()
+                Text(clock).font(.system(size: 24, weight: .semibold)).monospacedDigit()
             }
             .foregroundColor(mins < 0 ? NFColor.danger : NFColor.royal)
         }
@@ -720,7 +719,7 @@ struct NativeTableCard: View {
             let alert = since >= 30
             HStack(alignment: .firstTextBaseline, spacing: 3) {
                 Text("最終注文から").font(.system(size: 11, weight: .semibold))
-                Text("\(since)").font(.system(size: 16, weight: .heavy)).monospacedDigit()
+                Text("\(since)").font(.system(size: 16, weight: .semibold)).monospacedDigit()
                 Text("分").font(.system(size: 11, weight: .bold))
             }
             .foregroundColor(alert ? Self.callRed : NFColor.ink2)
@@ -804,10 +803,10 @@ struct NativeReservationPanel: View {
                         .foregroundColor(Self.yellow)
                         .frame(height: lineTop + lineBottom)
                     VStack(alignment: .leading, spacing: 0) {
-                        Text("ご予約台帳").font(.system(size: 17, weight: .heavy)).foregroundColor(.white).frame(height: lineTop)
+                        Text("ご予約台帳").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white).frame(height: lineTop)
                         Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(Self.yellow).frame(height: lineBottom)
                     }
-                    Image(systemName: "chevron.right").font(.system(size: 12, weight: .heavy)).foregroundColor(.white.opacity(0.6))
+                    Image(systemName: "chevron.right").font(.system(size: 12, weight: NT.strong)).foregroundColor(.white.opacity(0.6))
                 }
                 .frame(maxWidth: .infinity)
                 .frame(height: 60)
@@ -817,12 +816,12 @@ struct NativeReservationPanel: View {
             .padding(.horizontal, 12)
             .padding(.top, 12)
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text("来店待ち").font(.system(size: 16, weight: .heavy)).foregroundColor(Self.ink)
+                Text("来店待ち").font(.system(size: 16, weight: NT.strong)).foregroundColor(Self.ink)
                 Spacer(minLength: 4)
-                Text("\(remaining)").font(.system(size: 20, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink)
+                Text("\(remaining)").font(.system(size: 20, weight: NT.strong)).monospacedDigit().foregroundColor(Self.ink)
                 Text("組").font(.system(size: 11, weight: .bold)).foregroundColor(Self.ink.opacity(0.7))
                 if waitingPeople > 0 {
-                    Text("\(waitingPeople)").font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(Self.ink).padding(.leading, 4)
+                    Text("\(waitingPeople)").font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(Self.ink).padding(.leading, 4)
                     Text("名").font(.system(size: 11, weight: .bold)).foregroundColor(Self.ink.opacity(0.7))
                 }
             }
@@ -879,7 +878,7 @@ struct NativeReservationPanel: View {
     private func row(_ r: NFReservation) -> some View {
         let c = chip(r)
         return HStack(alignment: .center, spacing: 10) {
-            Text(r.time).font(.system(size: 15, weight: .heavy)).monospacedDigit().foregroundColor(NLColor.navy)
+            Text(r.time).font(.system(size: 15, weight: NT.strong)).monospacedDigit().foregroundColor(NLColor.navy)
             VStack(alignment: .leading, spacing: 2) {
                 Text("\(stripSama(r.name)) 様").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.ink).lineLimit(1)
                 Text("\(r.partySize)名・\(r.tableLabel)").font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
@@ -922,7 +921,7 @@ struct NativeFloorGuide: View {
                 if let ic = NRWKeywordIcon.symbol(for: "子連れ") { row(icon(ic, OV.primary), "子連れ", "予約のタグから") }
             }
             section("そのほか") {
-                row(AnyView(Text("リピ 2回").font(.system(size: 11, weight: .heavy)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5).fill(NLColor.blue))), "初回・リピ・常連", "顧客台帳とつながっているお客様の来店回数")
+                row(AnyView(Text("リピ 2回").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5).fill(NLColor.blue))), "初回・リピ・常連", "顧客台帳とつながっているお客様の来店回数")
                 row(AnyView(Text("最終注文から 45分").font(.system(size: 11, weight: .semibold)).foregroundColor(NativeTableCard.callRed)), "最終注文から", "最後の注文から何分。30 分で赤（卓へ行く目安）")
                 row(AnyView(Image(systemName: "hourglass").foregroundColor(NFColor.royal)), "残り時間", "→ 入店時刻、⏳ 残り時間（コース → 予約の終わり → 店の滞在時間）")
             }
@@ -948,7 +947,7 @@ struct NativeFloorGuide: View {
     private func row(_ mark: AnyView, _ title: String, _ text: String) -> some View {
         HStack(spacing: 12) {
             mark.frame(width: 90, alignment: .leading)
-            Text(title).font(.system(size: 15, weight: .heavy)).foregroundColor(NFColor.ink).frame(width: 120, alignment: .leading)
+            Text(title).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.ink).frame(width: 120, alignment: .leading)
             Text(text).font(.system(size: 13)).foregroundColor(NFColor.ink2)
             Spacer(minLength: 0)
         }
@@ -957,7 +956,7 @@ struct NativeFloorGuide: View {
 
     private func section<Content: View>(_ title: String, @ViewBuilder _ content: () -> Content) -> some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text(title).font(.system(size: 16, weight: .heavy)).foregroundColor(NFColor.ink)
+            Text(title).font(.system(size: 16, weight: NT.strong)).foregroundColor(NFColor.ink)
             content()
         }
         .padding(18)

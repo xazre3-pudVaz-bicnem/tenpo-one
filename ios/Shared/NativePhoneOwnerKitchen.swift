@@ -118,7 +118,7 @@ struct NativePhoneOwnerKitchenView: View {
                 if groups.isEmpty {
                     VStack(spacing: 8) {
                         Image(systemName: "checkmark.circle").font(.system(size: 38)).foregroundColor(NT.ok)
-                        Text("いま作る品はありません").font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                        Text("いま作る品はありません").font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                         Text("新しい注文が入るとここに出ます").font(.system(size: 12.5)).foregroundColor(NT.ink3)
                     }
                     .frame(maxWidth: .infinity).padding(.vertical, 50)
@@ -149,13 +149,13 @@ struct NativePhoneOwnerKitchenView: View {
         let open = items.filter { $0.kitchenStatus != "served" }
         return VStack(alignment: .leading, spacing: 0) {
             HStack(alignment: .firstTextBaseline, spacing: 6) {
-                Text(g.tableName ?? "#\(g.orderNo)").font(.system(size: 20, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
-                Text(Self.sourceLabel[g.orderSource] ?? g.orderSource).font(.system(size: 10.5, weight: .heavy)).foregroundColor(NT.ink2)
+                Text(g.tableName ?? "#\(g.orderNo)").font(.system(size: 20, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
+                Text(Self.sourceLabel[g.orderSource] ?? g.orderSource).font(.system(size: 10.5, weight: NT.strong)).foregroundColor(NT.ink2)
                     .padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5).fill(NT.lilac))
                 if g.tableName != nil { Text("#\(g.orderNo)").font(.system(size: 11.5, weight: .semibold)).foregroundColor(NT.ink3) }
                 Spacer()
                 HStack(alignment: .firstTextBaseline, spacing: 2) {
-                    Text("\(m)").font(.system(size: 22, weight: .heavy)).monospacedDigit()
+                    Text("\(m)").font(.system(size: 22, weight: NT.strong)).monospacedDigit()
                     Text("分").font(.system(size: 11, weight: .bold))
                 }
                 .foregroundColor(c)
@@ -168,7 +168,7 @@ struct NativePhoneOwnerKitchenView: View {
                     Task { await model.act(["type": "kdsOrderServed", "orderId": g.orderId, "itemIds": station == "all" ? [] : open.map(\.id)]) }
                 } label: {
                     Text(station == "all" ? "すべて提供済" : "\(Self.stationLabel[station] ?? "") をすべて提供済")
-                        .font(.system(size: 15, weight: .heavy)).foregroundColor(.white)
+                        .font(.system(size: 15, weight: NT.strong)).foregroundColor(.white)
                         .frame(maxWidth: .infinity).frame(height: 46)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(NT.pay))
                 }
@@ -195,7 +195,7 @@ struct NativePhoneOwnerKitchenView: View {
             if let next { Task { await model.act(["type": "kdsItemStatus", "itemId": it.id, "next": next]) } }
         } label: {
             HStack(alignment: .top, spacing: 10) {
-                Text("\(it.quantity)").font(.system(size: 19, weight: .heavy)).monospacedDigit().foregroundColor(NT.ink).frame(minWidth: 24, alignment: .trailing)
+                Text("\(it.quantity)").font(.system(size: 19, weight: NT.strong)).monospacedDigit().foregroundColor(NT.ink).frame(minWidth: 24, alignment: .trailing)
                 VStack(alignment: .leading, spacing: 2) {
                     Text(it.name).font(.system(size: 16, weight: .bold)).foregroundColor(it.kitchenStatus == "served" ? NT.ink3 : NT.ink)
                         .strikethrough(it.kitchenStatus == "served").multilineTextAlignment(.leading)
@@ -208,7 +208,7 @@ struct NativePhoneOwnerKitchenView: View {
                 }
                 Spacer(minLength: 6)
                 VStack(alignment: .trailing, spacing: 3) {
-                    Text(Self.statusLabel[it.kitchenStatus] ?? it.kitchenStatus).font(.system(size: 11.5, weight: .heavy)).foregroundColor(chip.1)
+                    Text(Self.statusLabel[it.kitchenStatus] ?? it.kitchenStatus).font(.system(size: 11.5, weight: NT.strong)).foregroundColor(chip.1)
                         .padding(.horizontal, 8).padding(.vertical, 3).background(Capsule().fill(chip.0))
                     if next != nil, let label = Self.nextLabel[it.kitchenStatus] {
                         Text("押して\(label)").font(.system(size: 10, weight: .semibold)).foregroundColor(NT.ink3)
@@ -266,9 +266,9 @@ struct NativePhoneOwnerKitchenView: View {
                         ForEach(rows.filter { $0.station == st }) { r in
                             VStack(alignment: .leading, spacing: 4) {
                                 HStack(alignment: .firstTextBaseline) {
-                                    Text(r.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink)
+                                    Text(r.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink)
                                     Spacer()
-                                    Text("× \(r.quantity)").font(.system(size: 18, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                                    Text("× \(r.quantity)").font(.system(size: 18, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
                                 }
                                 if !r.mods.isEmpty { Text(r.mods).font(.system(size: 12)).foregroundColor(NT.ink3) }
                                 HStack(spacing: 5) {

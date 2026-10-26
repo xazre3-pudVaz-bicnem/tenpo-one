@@ -203,7 +203,7 @@ struct NAAnnouncementForm: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack {
-                Text("お知らせを作成").font(.system(size: 19, weight: .heavy)).foregroundColor(NFColor.navy)
+                Text("お知らせを作成").font(.system(size: 19, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Spacer()
                 Button { onDone() } label: { Image(systemName: "xmark").font(.system(size: 16, weight: .bold)).foregroundColor(NFColor.ink2).frame(width: 36, height: 36) }
             }

@@ -101,7 +101,7 @@ struct NPZPoNewSheet: View {
         Button { lines.append(Line()) } label: {
             HStack(spacing: 6) {
                 Image(systemName: "plus.circle.fill").font(.system(size: 16, weight: .bold))
-                Text("明細を追加").font(.system(size: 15, weight: .heavy))
+                Text("明細を追加").font(.system(size: 15, weight: NT.strong))
             }
             .foregroundColor(NT.purpleDeep).frame(maxWidth: .infinity).frame(height: 48)
             .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(NT.lilac))
@@ -120,7 +120,7 @@ struct NPZPoNewSheet: View {
         let index = (lines.firstIndex(where: { $0.id == line.id }) ?? 0) + 1
         return VStack(alignment: .leading, spacing: 10) {
             HStack {
-                Text("明細 \(index)").font(.system(size: 13, weight: .heavy)).foregroundColor(NT.ink3)
+                Text("明細 \(index)").font(.system(size: 13, weight: NT.strong)).foregroundColor(NT.ink3)
                 Spacer()
                 Button {
                     lines.removeAll { $0.id == line.id }
@@ -163,9 +163,9 @@ struct NPZPoNewSheet: View {
             NPZInfoRow(label: "消費税", value: NPZ.yen(t))
             NPZDivider()
             HStack(alignment: .firstTextBaseline) {
-                Text("合計（税込）").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink)
+                Text("合計（税込）").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink)
                 Spacer()
-                Text(NPZ.yen(s + t)).font(.system(size: 24, weight: .heavy)).foregroundColor(NT.purpleDeep).monospacedDigit()
+                Text(NPZ.yen(s + t)).font(.system(size: 24, weight: NT.strong)).foregroundColor(NT.purpleDeep).monospacedDigit()
             }
         }
     }
@@ -313,7 +313,7 @@ struct NPZPoReceiveSheet: View {
     var body: some View {
         NPOCSheetFrame(title: "入荷登録", confirmText: busy ? "登録中…" : "登録する（\(count)品）", busy: busy, onCancel: onClose, onConfirm: { Task { await save() } }) {
             HStack(alignment: .firstTextBaseline) {
-                Text("発注書 #\(po.poNo)・\(po.vendorName)").font(.system(size: 14, weight: .heavy)).foregroundColor(NT.ink).lineLimit(1)
+                Text("発注書 #\(po.poNo)・\(po.vendorName)").font(.system(size: 14, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(1)
                 Spacer()
             }
             if !openItems.isEmpty {
@@ -349,7 +349,7 @@ struct NPZPoReceiveSheet: View {
         let done = i.remaining <= 0
         return VStack(alignment: .leading, spacing: 9) {
             HStack(alignment: .firstTextBaseline, spacing: 8) {
-                Text(i.name).font(.system(size: 16, weight: .heavy)).foregroundColor(NT.ink).lineLimit(2)
+                Text(i.name).font(.system(size: 16, weight: NT.strong)).foregroundColor(NT.ink).lineLimit(2)
                 Spacer(minLength: 6)
                 if done { NOSBadge(text: "入荷済み", color: NT.ok) }
             }
@@ -364,8 +364,8 @@ struct NPZPoReceiveSheet: View {
                                   onTap: { editing = i })
                     Button { qty[i.id] = i.remaining } label: {
                         VStack(spacing: 1) {
-                            Image(systemName: "checkmark").font(.system(size: 15, weight: .heavy))
-                            Text("残り全部").font(.system(size: 9.5, weight: .heavy))
+                            Image(systemName: "checkmark").font(.system(size: 15, weight: NT.strong))
+                            Text("残り全部").font(.system(size: 9.5, weight: NT.strong))
                         }
                         .foregroundColor(q >= i.remaining ? .white : NT.ok)
                         .frame(width: 58, height: 52)
