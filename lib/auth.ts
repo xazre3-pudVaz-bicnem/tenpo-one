@@ -93,8 +93,13 @@ export const getSessionContext = cache(async (): Promise<SessionContext | null> 
   ]);
   if (!profile) return null;
   // サポート用のメンバーシップは「入っている」cookie があるときだけ使う（戻るを押し忘れても、運営はふだんコントロールセンターへ）
+  // 運営（is_cypress_admin）のときだけ見る：お店の人の行に同じ印が入っても、その人がログインできなくなることはない
   const membership =
-    isSupportMembership(membershipRow as { hourly_note?: string | null } | null) && membershipRow?.organization_id !== supportOrg ? null : membershipRow;
+    profile.is_cypress_admin === true &&
+    isSupportMembership(membershipRow as { hourly_note?: string | null } | null) &&
+    membershipRow?.organization_id !== supportOrg
+      ? null
+      : membershipRow;
   // 停止ユーザーは既存セッションでも利用不可（次のリクエストで即時遮断）
   if (profile.status === 'suspended') {
     // この端末だけログアウトする（scope:'local'）。
