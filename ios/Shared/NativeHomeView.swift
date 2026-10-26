@@ -263,8 +263,9 @@ struct NativeHomeView: View {
 
     private var topBar: some View {
         VStack(spacing: 0) {
-            // 時計・電波・電池の行（白い字）だけは左のメニューと同じ濃い色の細い帯（無いと白い字が見えない。2026-10-25 Ronnie「時計・電波が見えない」）
-            Self.sideBg.frame(height: 20)
+            // 時計・電波・電池の行も本文と同じ色（濃い帯は出さない。2026-10-27 02:31 Ronnie「top ko color row wala pardaina」）。
+            // 時刻は左のメニューの上（濃い地）なので見える。右の電波・電池の白い字は、ホームでは見えにくい
+            Color.clear.frame(height: 20)
             // 上のバーは本文と同じ色（2026-10-27 01:58 Ronnie「top ko bar ma yo color hudaina hai left patti matrai hunxa top ko bar body color jastai hunxa」）
             HStack(spacing: 10) {
                 // 「ホーム」の字は出さない（ここがホーム。2026-10-24 19:01 Ronnie）
@@ -292,8 +293,8 @@ struct NativeHomeView: View {
             }
             .padding(.horizontal, 20)
             .frame(height: 52)
-            .background(Self.pageBg)
         }
+        .background(Self.pageBg)
     }
 
     // MARK: 左のメニュー（ホーム・オーダー・会計・店舗台帳・即会計・入出金・ドロア／いちばん下に 設定）
