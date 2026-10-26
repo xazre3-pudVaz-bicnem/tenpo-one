@@ -17,7 +17,7 @@ import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { cancelSteraPayment, checkSteraPayment, startSteraPayment } from '@/app/app/pos/stera-actions';
 import { enqueueDrawerKick, enqueueExpoSlipPrint, enqueueOrderSlipPrint, enqueueReceiptPrint, enqueueSelectedItemsPrint, enqueueStockListPrint } from '@/app/app/pos/print-actions';
 import { shouldOpenDrawer } from '@/lib/printing/types';
-import { isNativeFloorActionType, parseNativeFloorAction, type NativeFloorAction } from '@/lib/native-floor';
+import { isNativeFloorActionType, parseNativeFloorAction, pickNativeFloorStore, type NativeFloorAction } from '@/lib/native-floor';
 import { loadNativeFloor } from '@/lib/native-floor-server';
 import { loadNativeHome } from '@/lib/native-home-server';
 import { isNativeHandyActionType, parseNativeHandyAction } from '@/lib/native-handy';
@@ -849,10 +849,8 @@ export async function GET(request: Request) {
 
   // フロア（テーブル一覧）。Web のテーブル一覧と同じ組み立て（lib/floor-view-server.ts）
   if (part === 'floor') {
-    const storeParam = url.searchParams.get('store');
-    const store = isUuid(storeParam)
-      ? (ctx.stores.find((s) => s.id === storeParam) ?? (ctx.isHq ? ctx.currentStore : null))
-      : (ctx.currentStore ?? ctx.stores[0] ?? null);
+    // 保存してあった一覧の店がこの人の店でなければ今の店（lib/native-floor.ts。2026-10-26「テーブルが見つかりません」）
+    const store = pickNativeFloorStore(ctx, url.searchParams.get('store'));
     if (!store) return json({ ok: false, error: '店舗がありません' }, 404);
     const { loadStoreAccess, peekRegisterDevice } = await import('@/lib/store-access-server');
     const { policy, onNetwork } = await loadStoreAccess(store.id);
