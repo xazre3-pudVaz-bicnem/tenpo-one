@@ -90,6 +90,7 @@ struct NativeSetupSheet: View {
     @State private var popup: NFSetupPopup?
     /// テンキーの数（ポップアップの中で入れる）
     @State private var padText = ""
+    @State private var padReplaceOnDigit = false
     /// 顧客（電話番号で探して伝票に付ける。USEN の「顧客名 設定」）
     @State private var customer: NFCustomerHit?
     @State private var custPhone = ""
@@ -578,14 +579,16 @@ struct NativeSetupSheet: View {
     private func openPad(_ t: NFPadTarget) {
         let v = padInitial(t)
         padText = v > 0 ? String(v) : ""
+        padReplaceOnDigit = true
         popup = .pad(t)
     }
 
     private func padKey(_ k: String) {
         switch k {
-        case "C": padText = ""
-        case "⌫": padText = String(padText.dropLast())
+        case "C": padText = ""; padReplaceOnDigit = false
+        case "⌫": padText = String(padText.dropLast()); padReplaceOnDigit = false
         default:
+            if padReplaceOnDigit { padText = ""; padReplaceOnDigit = false }
             var t = padText + k
             while t.count > 1 && t.hasPrefix("0") { t.removeFirst() }
             if t.count <= 3 { padText = t }
@@ -633,7 +636,7 @@ struct NativeSetupSheet: View {
         startChanged = true
     }
 
-    /// 1〜5 と ＋（＋はテンキー）。6 名以上は ＋ に数を出す
+    /// 1〜5 のクイック選択と、人数を直接入力するテンキー。
     private func countRow(_ ja: String, en: String, value: Binding<Int>, target: NFPadTarget) -> some View {
         HStack(spacing: 8) {
             HStack(alignment: .firstTextBaseline, spacing: 4) {
@@ -654,13 +657,21 @@ struct NativeSetupSheet: View {
             }
             let more = value.wrappedValue > 5
             Button { openPad(target) } label: {
-                Text(more ? "\(value.wrappedValue)" : "＋").font(.system(size: 22, weight: .bold))
+                VStack(spacing: 2) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "keyboard")
+                        if more { Text("\(value.wrappedValue)").monospacedDigit() }
+                    }
+                    .font(.system(size: 18, weight: .medium))
+                    Text("テンキー").font(.system(size: 10, weight: .medium))
+                }
                     .foregroundColor(more ? .white : GIColor.navy)
-                    .frame(maxWidth: .infinity).frame(height: 48)
+                    .frame(width: 76, height: 48)
                     .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(more ? GIColor.navy : Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(more ? Color.clear : GIColor.line, lineWidth: 1.2))
             }
             .buttonStyle(PressableStyle())
+            .accessibilityLabel("人数をテンキーで入力")
             // クリア（文字でなくアイコン。2026-10-24 Ronnie）
             Button { value.wrappedValue = 0 } label: {
                 Image(systemName: "delete.left").font(.system(size: 20, weight: .semibold))
