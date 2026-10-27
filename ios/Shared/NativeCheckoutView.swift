@@ -911,7 +911,7 @@ struct NativeCheckoutView: View {
                 .buttonStyle(PressableStyle())
                 .disabled(model.busy)
                 Spacer()
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text("伝票分割").font(.system(size: 20, weight: NT.strong)).foregroundColor(.white)
                     Text("Split by item").font(.system(size: 12, weight: .bold)).foregroundColor(OV.yellow)
                 }

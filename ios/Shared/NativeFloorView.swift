@@ -368,9 +368,7 @@ struct NativeTableCard: View {
                             ForEach([3, 2, 1], id: \.self) { n in
                                 HStack(spacing: 4) {
                                     ForEach(Array(marks.prefix(n)), id: \.self) { ic in
-                                        Image(systemName: ic).font(.system(size: 12, weight: .semibold)).foregroundColor(.white)
-                                            .frame(width: 24, height: 24)
-                                            .background(RoundedRectangle(cornerRadius: 7, style: .continuous).fill(OV.primary))
+                                        NFMarkIcon(symbol: ic, size: 24)
                                     }
                                 }
                                 .fixedSize()
@@ -909,9 +907,9 @@ struct NativeFloorGuide: View {
                 row(icon("bell.fill", NativeTableCard.callRed), "5分すぎ", "5 分たっても行っていないと赤")
             }
             section("番号の横の印（プラン・予約）") {
-                if let ic = NRWKeywordIcon.symbol(for: "飲み放題") { row(icon(ic, OV.primary), "飲み放題", "伝票のモード・予約のタグから") }
-                if let ic = NRWKeywordIcon.symbol(for: "誕生日") { row(icon(ic, OV.primary), "誕生日・記念日", "プレートを頼んだときだけ（伝票の品・予約）") }
-                if let ic = NRWKeywordIcon.symbol(for: "子連れ") { row(icon(ic, OV.primary), "子連れ", "予約のタグから") }
+                if let ic = NRWKeywordIcon.symbol(for: "飲み放題") { row(AnyView(NFMarkIcon(symbol: ic, size: 26)), "飲み放題", "伝票のモード・予約のタグから") }
+                if let ic = NRWKeywordIcon.symbol(for: "誕生日") { row(AnyView(NFMarkIcon(symbol: ic, size: 26)), "誕生日・記念日", "プレートを頼んだときだけ（伝票の品・予約）") }
+                if let ic = NRWKeywordIcon.symbol(for: "子連れ") { row(AnyView(NFMarkIcon(symbol: ic, size: 26)), "子連れ", "予約のタグから") }
             }
             section("そのほか") {
                 row(AnyView(Text("リピ 2回").font(.system(size: 11, weight: NT.strong)).foregroundColor(.white).padding(.horizontal, 6).padding(.vertical, 2).background(RoundedRectangle(cornerRadius: 5).fill(NLColor.blue))), "初回・リピ・常連", "顧客台帳とつながっているお客様の来店回数")
@@ -956,5 +954,61 @@ struct NativeFloorGuide: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(Color.white))
         .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+    }
+}
+
+
+/// 卓の印（飲み放題・誕生日／記念日のプレート…）：紫紺の四角に黄色の印。飲み放題はジョッキではなく泡のあるビールのグラス
+/// （2026-10-27 19:10 Ronnie「square vitra white nabanau、beer glass yello、jocky pardaina、glass beer with あわ、same as cake」）
+struct NFMarkIcon: View {
+    let symbol: String
+    var size: CGFloat = 24
+
+    var body: some View {
+        ZStack {
+            RoundedRectangle(cornerRadius: size * 0.29, style: .continuous).fill(OV.primary)
+            if symbol.hasPrefix("mug") {
+                // グラスと泡は別々に塗る（重なりで穴があかないように）
+                ZStack {
+                    NFBeerGlass().fill(OV.yellow)
+                    NFBeerFoam().fill(OV.yellow)
+                }
+                .frame(width: size * 0.46, height: size * 0.64)
+            } else {
+                Image(systemName: symbol).font(.system(size: size * 0.5, weight: .semibold)).foregroundColor(OV.yellow)
+            }
+        }
+        .frame(width: size, height: size)
+    }
+}
+
+/// 泡ののったビールのグラス（取っ手なし）
+struct NFBeerGlass: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let w = r.width, h = r.height
+        // グラス（上が少し広い）
+        p.move(to: CGPoint(x: r.minX + w * 0.06, y: r.minY + h * 0.34))
+        p.addLine(to: CGPoint(x: r.minX + w * 0.94, y: r.minY + h * 0.34))
+        p.addLine(to: CGPoint(x: r.minX + w * 0.84, y: r.maxY - h * 0.05))
+        p.addQuadCurve(to: CGPoint(x: r.minX + w * 0.74, y: r.maxY), control: CGPoint(x: r.minX + w * 0.83, y: r.maxY))
+        p.addLine(to: CGPoint(x: r.minX + w * 0.26, y: r.maxY))
+        p.addQuadCurve(to: CGPoint(x: r.minX + w * 0.16, y: r.maxY - h * 0.05), control: CGPoint(x: r.minX + w * 0.17, y: r.maxY))
+        p.closeSubpath()
+        return p
+    }
+}
+
+/// グラスの上の泡（丸を 3 つ）
+struct NFBeerFoam: Shape {
+    func path(in r: CGRect) -> Path {
+        var p = Path()
+        let w = r.width, h = r.height
+        let bubbles: [(CGFloat, CGFloat, CGFloat)] = [(0.24, 0.27, 0.24), (0.52, 0.18, 0.28), (0.78, 0.27, 0.24)]
+        for (cx, cy, rr) in bubbles {
+            let rad = w * rr
+            p.addEllipse(in: CGRect(x: r.minX + w * cx - rad, y: r.minY + h * cy - rad, width: rad * 2, height: rad * 2))
+        }
+        return p
     }
 }

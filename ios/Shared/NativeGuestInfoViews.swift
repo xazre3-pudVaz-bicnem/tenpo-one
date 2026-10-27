@@ -526,18 +526,21 @@ struct NativeSetupSheet: View {
     private var rowDivider: some View { Rectangle().fill(NFColor.line).frame(height: 1).padding(.leading, 14) }
 
     private func heading(_ ja: String, en: String, required: Bool = false) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 6) {
-            Text(ja).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.ink)
-            Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
+        // 英語は日本語の下に小さく（2026-10-27 19:07 Ronnie「everywhere english japanese ko tala lekha」）
+        HStack(alignment: .top, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(ja).font(.system(size: 15, weight: NT.strong)).foregroundColor(NFColor.ink)
+                Text(en).font(.system(size: 10)).foregroundColor(NFColor.ink3)
+            }
             if required { Text("＊").font(.system(size: 14, weight: .bold)).foregroundColor(NFColor.danger) }
         }
     }
 
     private func row<Right: View>(_ ja: String, en: String, @ViewBuilder right: () -> Right) -> some View {
         HStack(spacing: 10) {
-            HStack(alignment: .firstTextBaseline, spacing: 5) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(ja).font(.system(size: 16)).foregroundColor(NFColor.ink2)
-                Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3)
+                Text(en).font(.system(size: 10)).foregroundColor(NFColor.ink3)
             }
             .frame(width: 150, alignment: .leading)
             Spacer(minLength: 4)
@@ -639,7 +642,7 @@ struct NativeSetupSheet: View {
     /// 1〜5 のクイック選択と、人数を直接入力するテンキー。
     private func countRow(_ ja: String, en: String, value: Binding<Int>, target: NFPadTarget) -> some View {
         HStack(spacing: 8) {
-            HStack(alignment: .firstTextBaseline, spacing: 4) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text(ja).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink2)
                 Text(en).font(.system(size: 10)).foregroundColor(NFColor.ink3)
             }

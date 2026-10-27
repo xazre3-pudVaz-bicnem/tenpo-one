@@ -227,7 +227,7 @@ struct NativeCashIoView: View {
 
     private func entryCard(_ p: NCIoPayload) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("登録").font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Text("Entry").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
             }
@@ -453,7 +453,7 @@ struct NativeCashIoView: View {
 
     private func historyCard(_ p: NCIoPayload) -> some View {
         VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline, spacing: 6) {
+            VStack(alignment: .leading, spacing: 0) {
                 Text("本日の入出金履歴").font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
                 Text("Today").font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
             }

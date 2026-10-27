@@ -27,7 +27,8 @@ struct NativeTableSheet: View {
     @State private var guestEditorOpen = false
 
     // 少し広く・ボタンを大きく（2026-10-24 Ronnie「横と縦をちょっと広く、ボタンを見やすく押しやすく」）
-    private static let width: CGFloat = 680
+    /// 細く（2026-10-27 19:06 Ronnie「alli slim banau」）
+    private static let width: CGFloat = 460
 
     private var now: Double { model.now }
     private var slips: [NFSlip] { table.order?.slips ?? [] }
@@ -232,9 +233,11 @@ struct NativeTableSheet: View {
     // 着席中
     @ViewBuilder private var seatedBody: some View {
         // 人数・顧客・来店・金額のまとめは出さない（卓の箱に出ている。2026-10-24 Ronnie「ポップアップに金額などの詳細は要らない」）
-        HStack(spacing: 8) {
+        // 細く 2 列に：注文（左・縦長）｜レジ会計・会計伝票（右に縦）、その下に 移動｜合算、グループ｜支払メモ
+        // （2026-10-27 19:06 Ronnie「alli slim banau: oder check out / 会計伝票 / move merge / group memo」）
+        HStack(alignment: .top, spacing: 8) {
             // 注文も白い箱（濃い色だと選んだように見える（2026-10-27 10:25 Ronnie「yo color le garda pahilai select vaye jasto dekhiyo so sabai normal banau」））
-            bigButton("注文", en: "Order", fill: .white, textColor: Self.ink, border: Self.line, height: 64, size: 20) {
+            bigButton("注文", en: "Order", fill: .white, textColor: Self.ink, border: Self.line, height: 128, size: 22) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
@@ -245,8 +248,32 @@ struct NativeTableSheet: View {
             }
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
             // 注文＝紫紺、レジ会計・会計伝票＝白い箱（黒・緑にしない。2026-10-27 02:48 Ronnie「会計伝票 black ma pani pardaina」）
-            bigButton("レジ会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 64, size: 20, enabled: selected != nil) {
+            VStack(spacing: 8) {
+            bigButton("レジ会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 60, size: 18, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
+            }
+            // 会計伝票はポップアップにも残す（注文・レジ会計と同じ行。2026-10-27 19:03 Ronnie「会計伝票 ないね」）
+            bigButton("会計伝票", en: "Print bill", fill: .white, textColor: Self.ink, border: Self.line, height: 60, size: 18, enabled: selected != nil) {
+                Task {
+                    guard let s = selected else { return }
+                    // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで。無いときだけその卓のフロアのプリンター（floorBill）
+                    if NativeNet.shared.online {
+                        switch await NativeRegisterBill.print(orderId: s.id, clerkName: nil) {
+                        case .printed:
+                            model.show(toast: "お会計伝票を印刷します")
+                            return
+                        case .failed(let err):
+                            model.show(toast: "お会計伝票：\(err)")
+                            return
+                        case .noPrinter:
+                            break
+                        }
+                    }
+                    if let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
+                        model.show(toast: "お会計伝票を印刷します")
+                    }
+                }
+            }
             }
         }
         divider
@@ -254,9 +281,15 @@ struct NativeTableSheet: View {
             // 卓の移動はこのポップアップで（オーダー画面には伝票の操作を出さない。2026-10-24 Ronnie「order vitra yo pardaina」）
             popBtn("テーブル移動", en: "Move", on: panel == .move, enabled: selected != nil) { panel = panel == .move ? nil : .move }
             popBtn("テーブル合算", en: "Merge", on: panel == .merge, enabled: selected != nil) { panel = panel == .merge ? nil : .merge }
+        }
+        HStack(spacing: 8) {
             popBtn("グループ設定", en: "Group", on: groupOpen, enabled: canOperate) {
                 groupPick = table.groupTableIds.isEmpty ? [table.id] : table.groupTableIds
                 groupOpen.toggle()
+            }
+            popBtn("支払メモ", en: "Payment note", on: panel == .memo, enabled: selected != nil) {
+                memoText = ""
+                panel = panel == .memo ? nil : .memo
             }
         }
         if let o = table.order, let slip = selected {
@@ -270,14 +303,6 @@ struct NativeTableSheet: View {
         if panel == .merge { mergePanel }
         if panel == .move { movePanel }
 
-        divider
-        // 下の「お客様情報」は出さない（上の「お客様情報 10:21〜」と重なる。2026-10-24 Ronnie「ここに要らない」）
-        HStack(spacing: 8) {
-            popBtn("支払メモ", en: "Payment note", on: panel == .memo, enabled: selected != nil) {
-                memoText = ""
-                panel = panel == .memo ? nil : .memo
-            }
-        }
         if panel == .memo { memoPanel }
 
         // テーブルクリア：¥0 の卓（まだ何も注文していない）にだけ出す。店長の承認も必要
@@ -462,7 +487,7 @@ struct NativeTableSheet: View {
     private var divider: some View { Rectangle().fill(NFColor.line).frame(height: 1).padding(.vertical, 2) }
 
     private func section(_ ja: String, en: String) -> some View {
-        HStack(alignment: .firstTextBaseline, spacing: 4) {
+        VStack(alignment: .leading, spacing: 0) {
             Text(ja).font(.system(size: 14, weight: .bold))
             Text(en).font(.system(size: 11, weight: .semibold)).opacity(0.7)
         }
@@ -533,7 +558,7 @@ struct NativeTableSheet: View {
                 Text(en).font(.system(size: 11, weight: .semibold)).foregroundColor(on ? .white.opacity(0.8) : NFColor.ink3)
             }
             .foregroundColor(on ? .white : (danger ? NFColor.danger : NFColor.navy))
-            .frame(maxWidth: .infinity).frame(height: 58)
+            .frame(maxWidth: .infinity).frame(height: 52)
             .padding(.horizontal, 4)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? Self.primary : (danger ? NFColor.danger.opacity(0.08) : Color.white)))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? Color.clear : (danger ? NFColor.danger.opacity(0.25) : Self.line), lineWidth: 1))
