@@ -65,6 +65,10 @@ struct NativeSetupSheet: View {
     var edit: NFVisitEdit? = nil
     /// Also used inside the table popup, so floor and ledger share one editor.
     var embedded = false
+    var onTableGroup: (() -> Void)? = nil
+    var onTableBlock: (() -> Void)? = nil
+    var tableGroupOpen = false
+    var tableActionsEnabled = true
     let onClose: () -> Void
     let onStarted: (String) -> Void
 
@@ -187,10 +191,11 @@ struct NativeSetupSheet: View {
     private var columns: some View {
         ViewThatFits(in: .horizontal) {
             HStack(alignment: .top, spacing: 16) {
-                leftColumn.frame(width: 390)
+                leftColumn.frame(width: 360).frame(maxHeight: .infinity, alignment: .top)
                 card { guestPad.padding(10) }
-                    .frame(width: 390)
+                    .frame(width: 420).frame(maxHeight: .infinity)
             }
+            .fixedSize(horizontal: false, vertical: true)
             VStack(spacing: 12) {
                 leftColumn
                 card { guestPad.padding(10) }
@@ -202,65 +207,95 @@ struct NativeSetupSheet: View {
     // MARK: 左の列
 
     private var leftColumn: some View {
-        VStack(alignment: .leading, spacing: 8) {
+        VStack(alignment: .leading, spacing: 12) {
             card {
                 if !embedded {
-                row("テーブル", en: "Table") { Text(table.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.ink) }
-                rowDivider
+                    row("テーブル", en: "Table") { valueText(table.name, on: true) }
+                    rowDivider
                 }
                 row("モード", en: "Mode") {
-                    valueText(planNames, on: true)
-                    toggleSlot(nil, enabled: false)
-                    setButton { popup = .mode }
+                    selectionField(planNames) { popup = .mode }
                 }
-                if plans.contains(where: { $0 != "normal" }) || courseId != nil {
-                    rowDivider
-                    row("プラン", en: "Plan") {
-                        valueText(pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames, on: !pickedPlanNames.isEmpty || courseId != nil)
-                        toggleSlot(nil, enabled: false)
-                        setButton { popup = .plan }
-                    }
-                }
-                if shownName != nil {
                 rowDivider
-                // 顧客名は予約（店舗台帳）から自動で出す。探すボタンは置かない（2026-10-24 Ronnie「予約にあれば自動で出る」）
-                row("顧客名", en: "Name") {
-                    valueText(shownName.map { "\($0) 様" } ?? "未登録", on: shownName != nil)
-                    toggleSlot(nil, enabled: false)
-                    Color.clear.frame(width: 64, height: 32)
-                }
+                row("プラン", en: "Plan") {
+                    selectionField(pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames) { popup = .plan }
                 }
             }
-            card {
-                // どの行も同じ列にそろえる：値（右寄せ）→ スイッチ → 設定（2026-10-27 19:44 Ronnie「時間 lai agadi yeslai paxadi、design いっち」）
-                row("時間制", en: "Time limit") {
-                    valueText(timed ? nfDurationLabel(duration) : "設定なし", on: timed)
-                    toggleSlot($timed, enabled: true)
-                    setButton(enabled: timed) { popup = .duration }
-                }
-                rowDivider
-                row("終了前注意", en: "Last call") {
-                    valueText(timed && warningEnabled ? "\(warningMinutes)分前" : "設定なし", on: timed && warningEnabled)
-                    toggleSlot($warningEnabled, enabled: timed)
-                    setButton(enabled: timed && warningEnabled) { popup = .warning }
-                }
-                rowDivider
-                row("開始時間", en: "Start time") {
-                    valueText(timed ? "\(nfHm(effectiveStart))〜\(nfHm(effectiveStart.addingTimeInterval(Double(duration) * 60)))" : "\(nfHm(effectiveStart))〜", on: true)
-                    toggleSlot(nil, enabled: false)
-                    setButton { popup = .start }
-                }
-                // ラストオーダーの時刻（終わりから「終了前注意」の分だけ前。時間制のときだけ。2026-10-27 19:45 Ronnie「last order time pani need」）
-                if timed {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("タイマー設定").font(.system(size: 11)).foregroundColor(NFColor.ink3).padding(.leading, 2)
+                card {
+                    row("時間制", en: "Time limit") {
+                        checkbox($timed, label: "時間制", enabled: true)
+                        selectionField(nfDurationLabel(duration), enabled: timed) { popup = .duration }
+                    }
                     rowDivider
-                    row("L.O.", en: "Last order") {
-                        valueText(nfHm(effectiveStart.addingTimeInterval(Double(duration - (warningEnabled ? warningMinutes : 0)) * 60)), on: true)
-                        toggleSlot(nil, enabled: false)
-                        Color.clear.frame(width: 64, height: 32)
+                    row("終了前注意", en: "Last call") {
+                        checkbox($warningEnabled, label: "終了前注意", enabled: timed)
+                        selectionField("\(warningMinutes)分前", enabled: timed && warningEnabled) { popup = .warning }
+                    }
+                    rowDivider
+                    row("開始時間", en: "Start time") {
+                        selectionField(nfHm(effectiveStart), icon: "clock") { popup = .start }
+                    }
+                    if timed {
+                        rowDivider
+                        row("L.O.", en: "Last order") {
+                            valueText(nfHm(effectiveStart.addingTimeInterval(Double(duration - (warningEnabled ? warningMinutes : 0)) * 60)), on: true)
+                                .padding(.trailing, 10)
+                        }
+                    }
+                }
+            }
+            if onTableGroup != nil || onTableBlock != nil {
+                Spacer(minLength: 0)
+                HStack(spacing: 8) {
+                    if let onTableGroup {
+                        tableTab("テーブルグループ設定", icon: "square.grid.2x2", selected: tableGroupOpen, action: onTableGroup)
+                    }
+                    if let onTableBlock {
+                        tableTab("テーブルブロック", icon: "lock", action: onTableBlock)
                     }
                 }
             }
         }
+    }
+
+    private func selectionField(_ title: String, enabled: Bool = true, icon: String = "chevron.down", action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 6) {
+                valueText(title, on: enabled)
+                Spacer(minLength: 0)
+                Image(systemName: icon).font(.system(size: 10)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 10).frame(height: 36)
+            .background(Color(hex: 0xF7F7FA), in: RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(PressableStyle()).disabled(!enabled).opacity(enabled ? 1 : 0.4)
+    }
+
+    private func checkbox(_ value: Binding<Bool>, label: String, enabled: Bool) -> some View {
+        Button { value.wrappedValue.toggle() } label: {
+            Image(systemName: value.wrappedValue ? "checkmark.square.fill" : "square")
+                .font(.system(size: 20)).foregroundColor(Color(hex: 0x91879F))
+                .frame(width: 32, height: 44).contentShape(Rectangle())
+        }
+        .buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.4)
+        .accessibilityLabel(label).accessibilityValue(value.wrappedValue ? "オン" : "オフ")
+    }
+
+    private func tableTab(_ title: String, icon: String, selected: Bool = false, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack(spacing: 5) {
+                Image(systemName: icon)
+                Text(title).lineLimit(1).minimumScaleFactor(0.75)
+            }
+            .font(.system(size: 11, weight: .medium)).foregroundColor(GIColor.navy)
+            .frame(maxWidth: .infinity).frame(height: 38)
+            .background(Color(hex: selected ? 0xE9E4F1 : 0xF0EEF5), in: RoundedRectangle(cornerRadius: 9))
+            .overlay(RoundedRectangle(cornerRadius: 9).stroke(GIColor.line, lineWidth: 1))
+        }
+        .buttonStyle(PressableStyle()).disabled(!tableActionsEnabled)
+        .accessibilityAddTraits(selected ? .isSelected : [])
     }
 
     // MARK: ポップアップ（USEN の「設定」と同じく、押すと小さなカードで選ぶ。色・形はうちの）
@@ -555,7 +590,7 @@ struct NativeSetupSheet: View {
             right()
         }
         .padding(.horizontal, embedded ? 10 : 14)
-        .frame(minHeight: embedded ? 40 : 46)
+        .frame(minHeight: 52)
     }
 
     /// 開始時間（今から／決めた時刻）
@@ -678,19 +713,23 @@ struct NativeSetupSheet: View {
                     Text("名").font(.system(size: 14)).foregroundColor(NFColor.ink3)
                 }
                 .padding(.horizontal, 4)
-                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
-                    ForEach(["7", "8", "9", "4", "5", "6", "1", "2", "3", "C", "0", "⌫"], id: \.self) { k in
-                        Button { guestKey(k) } label: {
-                            Group {
-                                if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
+                VStack(spacing: 8) {
+                    ForEach([["7", "8", "9"], ["4", "5", "6"], ["1", "2", "3"], ["C", "0", "⌫"]], id: \.self) { keys in
+                        HStack(spacing: 8) {
+                            ForEach(keys, id: \.self) { k in
+                                Button { guestKey(k) } label: {
+                                    Group {
+                                        if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
+                                    }
+                                    .font(.system(size: 22, weight: .medium)).monospacedDigit()
+                                    .foregroundColor(k == "C" ? NFColor.danger : NFColor.ink)
+                                    .frame(maxWidth: .infinity, minHeight: 48, maxHeight: .infinity)
+                                    .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+                                    .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(GIColor.line, lineWidth: 1))
+                                }
+                                .buttonStyle(PressableStyle(scale: 0.94))
                             }
-                            .font(.system(size: 22, weight: .medium)).monospacedDigit()
-                            .foregroundColor(k == "C" ? NFColor.danger : NFColor.ink)
-                            .frame(maxWidth: .infinity).frame(height: 48)
-                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
-                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(GIColor.line, lineWidth: 1))
                         }
-                        .buttonStyle(PressableStyle(scale: 0.94))
                     }
                 }
             }
@@ -717,7 +756,6 @@ struct NativeSetupSheet: View {
             .frame(width: 140)
             .frame(maxHeight: .infinity)
         }
-        .fixedSize(horizontal: false, vertical: true)
     }
 
     /// テンキーの 1 押し：最初の数字は今の人数を置きかえる。C＝0、⌫＝1 けた消す

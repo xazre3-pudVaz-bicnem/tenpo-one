@@ -215,20 +215,17 @@ struct NativeTableSheet: View {
 
     // 空席
     @ViewBuilder private var emptyBody: some View {
-        NativeSetupSheet(model: model, table: table, embedded: true, onClose: onClose, onStarted: { id in
-            onClose(); onOpenOrder(id, false)
-        })
+        NativeSetupSheet(model: model, table: table, embedded: true,
+                         onTableGroup: {
+                             groupPick = table.groupTableIds.isEmpty ? [table.id] : table.groupTableIds
+                             groupOpen.toggle()
+                         }, onTableBlock: {
+                             Task { await model.act(["type": "floorBlock", "tableId": table.id, "unavailable": true]); onClose() }
+                         }, tableGroupOpen: groupOpen, tableActionsEnabled: canOperate,
+                         onClose: onClose, onStarted: { id in
+                             onClose(); onOpenOrder(id, false)
+                         })
         .zIndex(1)
-        divider
-        HStack(spacing: 8) {
-            secondaryButton(icon: "lock", "テーブルブロック", en: "Block", enabled: canOperate) {
-                Task { await model.act(["type": "floorBlock", "tableId": table.id, "unavailable": true]); onClose() }
-            }
-            secondaryButton(icon: nil, "テーブルグループ設定", en: "Table group", on: groupOpen, enabled: canOperate) {
-                groupPick = table.groupTableIds.isEmpty ? [table.id] : table.groupTableIds
-                groupOpen.toggle()
-            }
-        }
     }
 
     // 着席中
