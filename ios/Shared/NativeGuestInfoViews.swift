@@ -196,7 +196,11 @@ struct NativeSetupSheet: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: popup)
-        .task { await prefill() }
+        .task {
+            await prefill()
+            // 見本：人数のテンキーを開いておく（-tenpoPreviewPad YES。画面の確認用）
+            if UserDefaults.standard.bool(forKey: "tenpoPreviewPad") { openPad(.guests) }
+        }
     }
 
     /// 来店経路の列は出さない（会計で選ぶ）
