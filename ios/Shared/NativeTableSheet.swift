@@ -24,6 +24,7 @@ struct NativeTableSheet: View {
     @State private var memoText = ""
     @State private var clearConfirm = false
     @State private var approverPick = false
+    @State private var guestEditorOpen = false
 
     // 少し広く・ボタンを大きく（2026-10-24 Ronnie「横と縦をちょっと広く、ボタンを見やすく押しやすく」）
     private static let width: CGFloat = 680
@@ -227,9 +228,29 @@ struct NativeTableSheet: View {
             }
         }
         if let o = table.order, let slip = selected {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(slip.guestCount)名 ・ \(NFTime.hm(o.openedAtMs))〜\(NFTime.hm(o.endAtMs))")
+                    let names = o.plansOrDefault.compactMap { id in model.payload?.plans.first(where: { $0.id == id })?.name }
+                    Text(([names.joined(separator: "・"), o.course?.label].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " / "))
+                }
+                .font(.system(size: 13, weight: .regular)).foregroundColor(NFColor.ink2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button { guestEditorOpen.toggle() } label: {
+                    Label("変更", systemImage: "pencil")
+                        .font(.system(size: 13, weight: .medium)).foregroundColor(Self.primary)
+                        .padding(.horizontal, 10).frame(height: 36)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Self.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("人数・プラン・時間を変更")
+            }
+            if guestEditorOpen {
             NativeSetupSheet(model: model, table: table, edit: NFVisitEdit(order: o, slip: slip), embedded: true,
-                             onClose: onClose, onStarted: { _ in onClose() })
+                             onClose: { guestEditorOpen = false }, onStarted: { _ in guestEditorOpen = false })
                 .id(slip.id)
+            }
         }
         if panel == .merge { mergePanel }
         if panel == .move { movePanel }
