@@ -243,7 +243,7 @@ struct NativeSetupSheet: View {
                 // ラストオーダーの時刻（終わりから「終了前注意」の分だけ前。時間制のときだけ。2026-10-27 19:45 Ronnie「last order time pani need」）
                 if timed {
                     rowDivider
-                    row("ラストオーダー", en: "Last order") {
+                    row("L.O.", en: "Last order") {
                         valueText(nfHm(effectiveStart.addingTimeInterval(Double(duration - (warningEnabled ? warningMinutes : 0)) * 60)), on: true)
                         toggleSlot(nil, enabled: false)
                         Color.clear.frame(width: 64, height: 32)
@@ -540,10 +540,10 @@ struct NativeSetupSheet: View {
     private func row<Right: View>(_ ja: String, en: String, @ViewBuilder right: () -> Right) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(ja).font(.system(size: 16)).foregroundColor(NFColor.ink2)
-                Text(en).font(.system(size: 10)).foregroundColor(NFColor.ink3)
+                Text(ja).font(.system(size: 16)).foregroundColor(NFColor.ink2).lineLimit(1).minimumScaleFactor(0.75)
+                Text(en).font(.system(size: 10)).foregroundColor(NFColor.ink3).lineLimit(1)
             }
-            .frame(width: embedded ? 96 : 112, alignment: .leading)
+            .frame(width: embedded ? 84 : 112, alignment: .leading)
             Spacer(minLength: 4)
             right()
         }
