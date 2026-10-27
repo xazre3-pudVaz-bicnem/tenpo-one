@@ -248,6 +248,28 @@ struct NativeTableSheet: View {
             bigButton("レジ会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 64, size: 20, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
+            // 会計伝票はポップアップにも残す（注文・レジ会計と同じ行。2026-10-27 19:03 Ronnie「会計伝票 ないね」）
+            bigButton("会計伝票", en: "Print bill", fill: .white, textColor: Self.ink, border: Self.line, height: 64, size: 20, enabled: selected != nil) {
+                Task {
+                    guard let s = selected else { return }
+                    // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで。無いときだけその卓のフロアのプリンター（floorBill）
+                    if NativeNet.shared.online {
+                        switch await NativeRegisterBill.print(orderId: s.id, clerkName: nil) {
+                        case .printed:
+                            model.show(toast: "お会計伝票を印刷します")
+                            return
+                        case .failed(let err):
+                            model.show(toast: "お会計伝票：\(err)")
+                            return
+                        case .noPrinter:
+                            break
+                        }
+                    }
+                    if let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
+                        model.show(toast: "お会計伝票を印刷します")
+                    }
+                }
+            }
         }
         divider
         HStack(spacing: 8) {
