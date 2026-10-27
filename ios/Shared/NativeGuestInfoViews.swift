@@ -543,11 +543,11 @@ struct NativeSetupSheet: View {
                 Text(ja).font(.system(size: 16)).foregroundColor(NFColor.ink2)
                 Text(en).font(.system(size: 10)).foregroundColor(NFColor.ink3)
             }
-            .frame(width: 112, alignment: .leading)
+            .frame(width: embedded ? 96 : 112, alignment: .leading)
             Spacer(minLength: 4)
             right()
         }
-        .padding(.horizontal, 14)
+        .padding(.horizontal, embedded ? 10 : 14)
         .frame(minHeight: embedded ? 40 : 46)
     }
 
@@ -566,7 +566,9 @@ struct NativeSetupSheet: View {
 
     private func valueText(_ t: String, on: Bool) -> some View {
         Text(t).font(.system(size: 15, weight: .medium)).monospacedDigit()
-            .foregroundColor(on ? NFColor.ink2 : NFColor.ink3).lineLimit(3).fixedSize(horizontal: false, vertical: true)
+            // 1 行に（細いポップアップでも折り返さない。値の列をそろえる）
+            .foregroundColor(on ? NFColor.ink2 : NFColor.ink3).lineLimit(1).minimumScaleFactor(0.6)
+            .layoutPriority(1)
     }
 
     private func setButton(enabled: Bool = true, action: @escaping () -> Void) -> some View {
