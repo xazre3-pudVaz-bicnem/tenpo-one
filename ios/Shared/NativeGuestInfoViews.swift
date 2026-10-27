@@ -156,16 +156,13 @@ struct NativeSetupSheet: View {
                 ScrollView(showsIndicators: false) { AnyView(columns) }
             }
 
-            // 下：キャンセル・確定（USEN と同じく横並び）
-            VStack(spacing: 6) {
-                // 案内の文は出さない（2026-10-24 Ronnie「合計人数を…の説明はいらない」）。うまくいかなかったときだけ赤で出す
-                if let problem {
-                    Text(problem).font(.system(size: 13)).foregroundColor(NFColor.danger).lineLimit(2)
-                }
-                // キャンセル・確定は人数のテンキーの右へ（2026-10-27 19:35 Ronnie「sidai keyboard rakhdeu、1234 pardaina、milayera rakha」）
+            // キャンセル・確定は人数のテンキーの右へ（2026-10-27 19:35 Ronnie「sidai keyboard rakhdeu、1234 pardaina、milayera rakha」）。
+            // 下はうまくいかなかったときの赤い字だけ（案内の文は出さない）
+            if let problem {
+                Text(problem).font(.system(size: 13)).foregroundColor(NFColor.danger).lineLimit(2)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 18).padding(.vertical, 8)
             }
-            .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 14)
-            .background(NFColor.lilacSoft)
         }
         // 卓のポップアップの中では、テンキーなどの小窓が入る高さまで広げる（下のボタンと重ならない。2026-10-27 19:32 Ronnie の写真）
         .frame(minHeight: embedded && popup != nil ? 600 : nil, alignment: .top)
