@@ -191,7 +191,7 @@ struct NativeSetupSheet: View {
     /// 来店経路の列は出さない（会計で選ぶ）
     private var columns: some View {
         VStack(spacing: 16) {
-            planCard
+            planCard.zIndex(2)
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 16) {
                     leftColumn.frame(width: 360).frame(maxHeight: .infinity, alignment: .top).zIndex(1)
@@ -214,12 +214,12 @@ struct NativeSetupSheet: View {
                 rowDivider
             }
             row("モード", en: "Mode") {
-                selectionField(planNames) { timeDropdown = nil; popup = .mode }
-            }
+                catalogChoice(isPlan: false)
+            }.zIndex(2)
             rowDivider
             row("プラン", en: "Plan") {
-                selectionField(pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames) { timeDropdown = nil; popup = .plan }
-            }
+                catalogChoice(isPlan: true)
+            }.zIndex(1)
         }
     }
 
@@ -284,6 +284,54 @@ struct NativeSetupSheet: View {
                 }
             }
         }
+    }
+
+    private func catalogChoice(isPlan: Bool) -> some View {
+        let key = isPlan ? "plan" : "mode"
+        let items = isPlan ? planItems.map { ($0.id, $0.name) } : (payload?.plans ?? []).map { ($0.id, $0.name) }
+        let title = isPlan ? (pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames) : planNames
+        return selectionField(title) { timeDropdown = timeDropdown == key ? nil : key }
+            .overlay(alignment: .topLeading) {
+                if timeDropdown == key {
+                    VStack(spacing: 0) {
+                        ScrollView {
+                            VStack(spacing: 0) {
+                                if items.isEmpty {
+                                    Text("プランがありません").font(.system(size: 13)).foregroundColor(NFColor.ink3).frame(maxWidth: .infinity, minHeight: 44)
+                                }
+                                ForEach(items, id: \.0) { id, name in
+                                    let selected = isPlan ? (planItemIds + slipMenuItemIds).contains(id) : plans.contains(id)
+                                    Button {
+                                        if isPlan {
+                                            guard !slipMenuItemIds.contains(id) else { return }
+                                            if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
+                                            if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let minutes = item.durationMinutes, minutes > 0, planItemIds.contains(id) {
+                                                timed = true; duration = minutes
+                                            }
+                                        } else { togglePlan(id) }
+                                    } label: {
+                                        HStack(spacing: 8) {
+                                            Text(name).lineLimit(2).frame(maxWidth: .infinity, alignment: .leading)
+                                            if selected { Image(systemName: "checkmark") }
+                                        }
+                                        .font(.system(size: 14)).foregroundColor(GIColor.navy)
+                                        .padding(.horizontal, 12).frame(height: 44)
+                                        .background(selected ? Color(hex: 0xE7E0EF) : Color.white)
+                                    }.buttonStyle(.plain)
+                                }
+                            }
+                        }.frame(height: CGFloat(max(1, min(4, items.count))) * 44)
+                        Button { timeDropdown = nil } label: {
+                            Text("完了").font(.system(size: 12, weight: .semibold)).foregroundColor(GIColor.navy).frame(maxWidth: .infinity).frame(height: 32)
+                        }.buttonStyle(.plain)
+                    }
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 9))
+                    .clipShape(RoundedRectangle(cornerRadius: 9))
+                    .overlay(RoundedRectangle(cornerRadius: 9).stroke(GIColor.line, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    .offset(y: 39)
+                }
+            }
     }
 
     private func timeUnit(_ text: String) -> some View {
