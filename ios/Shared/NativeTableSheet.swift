@@ -98,19 +98,50 @@ struct NativeTableSheet: View {
 
     private var popupInner: some View {
             VStack(alignment: .leading, spacing: 10) {
-                ZStack {
+                // 1 行に：卓番・人数の札・（あいだに）時間とプラン・変更の鉛筆・閉じる
+                // （2026-10-27 18:59 Ronnie「T番 tesko right tira 人 manxe ko clip ani tesko side ma 変更 pen、ini haru ko bich ma details」）
+                HStack(alignment: .center, spacing: 10) {
                     Text(table.name)
-                        .font(.system(size: 20, weight: .bold, design: .rounded)).foregroundColor(.primary)
-                        .frame(maxWidth: .infinity)
-                    HStack {
-                        Spacer()
-                        Button(action: onClose) {
-                            Image(systemName: "xmark.circle.fill")
-                                .symbolRenderingMode(.hierarchical)
-                                .font(.system(size: 26)).foregroundColor(.secondary)
+                        .font(.system(size: 20, weight: .bold)).foregroundColor(Self.ink)
+                        .lineLimit(1).fixedSize()
+                    if let o = table.order, let slip = selected {
+                        HStack(spacing: 3) {
+                            Image(systemName: "person.2.fill").font(.system(size: 12, weight: .semibold))
+                            Text("\(slip.guestCount)").font(.system(size: 15, weight: .semibold)).monospacedDigit()
                         }
-                        .buttonStyle(.plain)
+                        .foregroundColor(Self.ink)
+                        .padding(.horizontal, 9).frame(height: 30)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Self.line, lineWidth: 1))
+                        .fixedSize()
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("\(NFTime.hm(o.openedAtMs))〜\(NFTime.hm(o.endAtMs))").monospacedDigit()
+                            let names = o.plansOrDefault.compactMap { id in model.payload?.plans.first(where: { $0.id == id })?.name }
+                            let plan = ([names.joined(separator: "・"), o.course?.label].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " / ")
+                            if !plan.isEmpty { Text(plan) }
+                        }
+                        .font(.system(size: 12, weight: .regular)).foregroundColor(NFColor.ink2)
+                        .lineLimit(1).minimumScaleFactor(0.8)
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        Button { guestEditorOpen.toggle() } label: {
+                            Label("変更", systemImage: "pencil")
+                                .font(.system(size: 13, weight: .medium)).foregroundColor(Self.primary)
+                                .padding(.horizontal, 10).frame(height: 30)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(Self.line, lineWidth: 1))
+                                .fixedSize()
+                        }
+                        .buttonStyle(PressableStyle())
+                        .accessibilityLabel("人数・プラン・時間を変更")
+                    } else {
+                        Spacer(minLength: 0)
                     }
+                    Button(action: onClose) {
+                        Image(systemName: "xmark.circle.fill")
+                            .symbolRenderingMode(.hierarchical)
+                            .font(.system(size: 26)).foregroundColor(.secondary)
+                    }
+                    .buttonStyle(.plain)
                 }
                 .padding(.bottom, 4)
 
@@ -229,24 +260,7 @@ struct NativeTableSheet: View {
             }
         }
         if let o = table.order, let slip = selected {
-            HStack(alignment: .top, spacing: 10) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text("\(slip.guestCount)名 ・ \(NFTime.hm(o.openedAtMs))〜\(NFTime.hm(o.endAtMs))")
-                    let names = o.plansOrDefault.compactMap { id in model.payload?.plans.first(where: { $0.id == id })?.name }
-                    Text(([names.joined(separator: "・"), o.course?.label].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " / "))
-                }
-                .font(.system(size: 13, weight: .regular)).foregroundColor(NFColor.ink2)
-                .frame(maxWidth: .infinity, alignment: .leading)
-                Button { guestEditorOpen.toggle() } label: {
-                    Label("変更", systemImage: "pencil")
-                        .font(.system(size: 13, weight: .medium)).foregroundColor(Self.primary)
-                        .padding(.horizontal, 10).frame(height: 36)
-                        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
-                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Self.line, lineWidth: 1))
-                }
-                .buttonStyle(PressableStyle())
-                .accessibilityLabel("人数・プラン・時間を変更")
-            }
+            // 人数・時間・プランと「変更」は上の見出しの行に
             if guestEditorOpen {
             NativeSetupSheet(model: model, table: table, edit: NFVisitEdit(order: o, slip: slip), embedded: true,
                              onClose: { guestEditorOpen = false }, onStarted: { _ in guestEditorOpen = false })
