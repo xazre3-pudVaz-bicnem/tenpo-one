@@ -236,9 +236,10 @@ struct NativeTableSheet: View {
         // 人数・顧客・来店・金額のまとめは出さない（卓の箱に出ている。2026-10-24 Ronnie「ポップアップに金額などの詳細は要らない」）
         // 細く 2 列に：注文（左・縦長）｜レジ会計・会計伝票（右に縦）、その下に 移動｜合算、グループ｜支払メモ
         // （2026-10-27 19:06 Ronnie「alli slim banau: oder check out / 会計伝票 / move merge / group memo」）
+        // 注文｜レジ会計（同じ大きさ）、その下に会計伝票を横長く（2026-10-27 19:39 Ronnie「注文 レジ会計 same button、会計伝票 横ながい、したのはそのまま」）
         HStack(alignment: .top, spacing: 8) {
             // 注文も白い箱（濃い色だと選んだように見える（2026-10-27 10:25 Ronnie「yo color le garda pahilai select vaye jasto dekhiyo so sabai normal banau」））
-            bigButton("注文", en: "Order", fill: .white, textColor: Self.ink, border: Self.line, height: 128, size: 22) {
+            bigButton("注文", en: "Order", fill: .white, textColor: Self.ink, border: Self.line, height: 72, size: 20) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
@@ -249,12 +250,13 @@ struct NativeTableSheet: View {
             }
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
             // 注文＝紫紺、レジ会計・会計伝票＝白い箱（黒・緑にしない。2026-10-27 02:48 Ronnie「会計伝票 black ma pani pardaina」）
-            VStack(spacing: 8) {
-            bigButton("レジ会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 60, size: 18, enabled: selected != nil) {
+            // 「レジ会計」→「会計」（2026-10-27 19:39 Ronnie「レジ会計 lai 会計 matra banau」）
+            bigButton("会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 72, size: 20, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
-            // 会計伝票はポップアップにも残す（注文・レジ会計と同じ行。2026-10-27 19:03 Ronnie「会計伝票 ないね」）
-            bigButton("会計伝票", en: "Print bill", fill: .white, textColor: Self.ink, border: Self.line, height: 60, size: 18, enabled: selected != nil) {
+        }
+        // 会計伝票はポップアップにも残す（2026-10-27 19:03 Ronnie「会計伝票 ないね」）
+            bigButton("会計伝票", en: "Print bill", fill: .white, textColor: Self.ink, border: Self.line, height: 56, size: 18, enabled: selected != nil) {
                 Task {
                     guard let s = selected else { return }
                     // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで。無いときだけその卓のフロアのプリンター（floorBill）
@@ -275,8 +277,6 @@ struct NativeTableSheet: View {
                     }
                 }
             }
-            }
-        }
         divider
         HStack(spacing: 8) {
             // 卓の移動はこのポップアップで（オーダー画面には伝票の操作を出さない。2026-10-24 Ronnie「order vitra yo pardaina」）
