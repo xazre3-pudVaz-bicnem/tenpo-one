@@ -10,28 +10,29 @@ struct NativeTableSheet: View {
     let anchor: CGRect?
     let onClose: () -> Void
     let onOpenOrder: (_ orderId: String, _ checkout: Bool) -> Void
+    var preferredOrderId: String? = nil
     /// 空席の「注文」→ 来店登録（お客様情報）。ポップアップは閉じて、フロア側がカードを出す（2026-10-24 Ronnie「注文を押したら次が出て、これは消える」）
     var onSetup: (_ table: NFTable) -> Void = { _ in }
     /// 着席中の「お客様情報」→ 席の時間・人数・モードの直し。同じくポップアップは閉じる
     var onGuestInfo: (_ order: NFOrder, _ slip: NFSlip) -> Void = { _, _ in }
 
-    private enum Panel { case merge, move, print, guest, memo }
+    private enum Panel { case merge, move, guest, memo }
     @State private var panel: Panel?
     @State private var groupOpen = false
     @State private var groupPick: [String] = []
-    @State private var printPick: [String] = []
     @State private var guestEdit = 1
     @State private var memoText = ""
     @State private var clearConfirm = false
     @State private var approverPick = false
+    @State private var guestEditorOpen = false
 
     // 少し広く・ボタンを大きく（2026-10-24 Ronnie「横と縦をちょっと広く、ボタンを見やすく押しやすく」）
-    private static let width: CGFloat = 420
+    private static let width: CGFloat = 680
 
     private var now: Double { model.now }
     private var slips: [NFSlip] { table.order?.slips ?? [] }
     /// 会計する伝票（1枚ならそれ。2枚以上は古い順の先頭。Web と同じ）
-    private var selected: NFSlip? { slips.first }
+    private var selected: NFSlip? { slips.first(where: { $0.id == preferredOrderId }) ?? slips.first }
     private var seated: Bool { !slips.isEmpty || ["seated", "ordering", "billing"].contains(table.currentStatus) }
     private var guests: Int { selected?.guestCount ?? table.order?.guestCount ?? 0 }
     private var total: Int { selected?.total ?? table.order?.total ?? 0 }
@@ -53,7 +54,7 @@ struct NativeTableSheet: View {
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
             // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
             // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
-            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil, fixedTop: 150) {
+            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil, fixedTop: 64) {
                 popup
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(180))
@@ -182,9 +183,10 @@ struct NativeTableSheet: View {
 
     // 空席
     @ViewBuilder private var emptyBody: some View {
-        bigButton("注文", en: "Order", fill: Self.primary, height: 64, size: 20) { onClose(); onSetup(table) }
+        NativeSetupSheet(model: model, table: table, embedded: true, onClose: onClose, onStarted: { id in
+            onClose(); onOpenOrder(id, false)
+        })
         divider
-        section("テーブル", en: "Table")
         HStack(spacing: 8) {
             secondaryButton(icon: "lock", "テーブルブロック", en: "Block", enabled: canOperate) {
                 Task { await model.act(["type": "floorBlock", "tableId": table.id, "unavailable": true]); onClose() }
@@ -215,32 +217,7 @@ struct NativeTableSheet: View {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
         }
-        // 会計伝票をその場で出す（レジ画面へ行かない）。注文・レジ会計のすぐ下に横いっぱい・黒
-        bigButton("会計伝票", en: "Print bill", fill: .white, textColor: Self.ink, border: Self.line, height: 62, size: 19, enabled: selected != nil) {
-            Task {
-                guard let s = selected else { return }
-                // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで（いつも。2026-10-26 Ronnie「default always on」）。
-                // この iPad にレシートプリンターが無いときだけ、今まで通りその卓のフロアのプリンター（floorBill）
-                if NativeNet.shared.online {
-                    switch await NativeRegisterBill.print(orderId: s.id, clerkName: nil) {
-                    case .printed:
-                        model.show(toast: "お会計伝票を印刷します")
-                        return
-                    case .failed(let err):
-                        model.show(toast: "お会計伝票：\(err)")
-                        return
-                    case .noPrinter:
-                        break
-                    }
-                }
-                if let _ = await model.act(["type": "floorBill", "orderId": s.id], refreshAfter: false) {
-                    model.show(toast: "お会計伝票を印刷します")
-                }
-            }
-        }
-
         divider
-        section("テーブル", en: "Table")
         HStack(spacing: 8) {
             // 卓の移動はこのポップアップで（オーダー画面には伝票の操作を出さない。2026-10-24 Ronnie「order vitra yo pardaina」）
             popBtn("テーブル移動", en: "Move", on: panel == .move, enabled: selected != nil) { panel = panel == .move ? nil : .move }
@@ -250,30 +227,33 @@ struct NativeTableSheet: View {
                 groupOpen.toggle()
             }
         }
-        if let o = table.order {
-            popBtn("お客様情報　\(NFTime.hm(o.openedAtMs))〜\(NFTime.hm(o.endAtMs))", en: "Guest info / time", enabled: selected != nil) {
-                if let s = selected { onClose(); onGuestInfo(o, s) }
+        if let o = table.order, let slip = selected {
+            HStack(alignment: .top, spacing: 10) {
+                VStack(alignment: .leading, spacing: 4) {
+                    Text("\(slip.guestCount)名 ・ \(NFTime.hm(o.openedAtMs))〜\(NFTime.hm(o.endAtMs))")
+                    let names = o.plansOrDefault.compactMap { id in model.payload?.plans.first(where: { $0.id == id })?.name }
+                    Text(([names.joined(separator: "・"), o.course?.label].compactMap { $0 }.filter { !$0.isEmpty }).joined(separator: " / "))
+                }
+                .font(.system(size: 13, weight: .regular)).foregroundColor(NFColor.ink2)
+                .frame(maxWidth: .infinity, alignment: .leading)
+                Button { guestEditorOpen.toggle() } label: {
+                    Label("変更", systemImage: "pencil")
+                        .font(.system(size: 13, weight: .medium)).foregroundColor(Self.primary)
+                        .padding(.horizontal, 10).frame(height: 36)
+                        .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(Self.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+                .accessibilityLabel("人数・プラン・時間を変更")
+            }
+            if guestEditorOpen {
+            NativeSetupSheet(model: model, table: table, edit: NFVisitEdit(order: o, slip: slip), embedded: true,
+                             onClose: { guestEditorOpen = false }, onStarted: { _ in guestEditorOpen = false })
+                .id(slip.id)
             }
         }
         if panel == .merge { mergePanel }
         if panel == .move { movePanel }
-
-        // 会計伝票は上の黒いボタンへ移した。ここは品を選んで出す印刷だけ
-        section("印刷", en: "Print")
-        HStack(spacing: 8) {
-            popBtn("選択印刷", en: "Selected", on: panel == .print, enabled: selected != nil && !(selected?.lines.isEmpty ?? true)) {
-                printPick = []
-                panel = panel == .print ? nil : .print
-            }
-            popBtn("デシャップ伝票", en: "Expo", enabled: selected != nil) {
-                Task {
-                    if let s = selected, let _ = await model.act(["type": "floorExpo", "orderId": s.id], refreshAfter: false) {
-                        model.show(toast: "デシャップ伝票を印刷します")
-                    }
-                }
-            }
-        }
-        if panel == .print { printPanel }
 
         divider
         // 下の「お客様情報」は出さない（上の「お客様情報 10:21〜」と重なる。2026-10-24 Ronnie「ここに要らない」）
@@ -365,44 +345,6 @@ struct NativeTableSheet: View {
                         }
                         .buttonStyle(PressableStyle())
                         .disabled(model.busy)
-                    }
-                }
-            }
-        }
-    }
-
-    private var printPanel: some View {
-        panelBox {
-            Text("印刷する品を選ぶ / Pick items").font(.system(size: 11, weight: .bold)).foregroundColor(NFColor.ink2)
-            ScrollView {
-                VStack(spacing: 4) {
-                    ForEach(selected?.lines ?? []) { l in
-                        let on = printPick.contains(l.id)
-                        Button {
-                            if on { printPick.removeAll { $0 == l.id } } else { printPick.append(l.id) }
-                        } label: {
-                            HStack {
-                                Text(l.name).lineLimit(1)
-                                Spacer()
-                                Text("x\(l.quantity)").monospacedDigit().foregroundColor(NFColor.ink3)
-                            }
-                            .font(.system(size: 12, weight: .bold))
-                            .foregroundColor(on ? NFColor.royal : NFColor.navy)
-                            .padding(.horizontal, 8).padding(.vertical, 6)
-                            .background(RoundedRectangle(cornerRadius: 8).fill(on ? NFColor.irisSoft : Color.white))
-                            .overlay(RoundedRectangle(cornerRadius: 8).stroke(on ? NFColor.royal : NFColor.line, lineWidth: 1))
-                        }
-                        .buttonStyle(.plain)
-                    }
-                }
-            }
-            .frame(maxHeight: 160)
-            bigButton("この\(printPick.count)品を印刷 / Print", en: nil, fill: NFColor.iris, height: 46, size: 15, enabled: !printPick.isEmpty) {
-                Task {
-                    guard let s = selected else { return }
-                    if let _ = await model.act(["type": "floorPrintSelected", "orderId": s.id, "itemIds": printPick], refreshAfter: false) {
-                        panel = nil
-                        model.show(toast: "\(printPick.count)品を印刷します")
                     }
                 }
             }
@@ -686,7 +628,8 @@ struct NFPopoverLayout: Layout {
         guard let card = subviews.first else { return }
         let W = bounds.width, H = bounds.height
         let w = min(width, max(200, W - margin * 2))
-        let cap = min(maxHeight, max(120, H - margin * 2))
+        let reservedTop = fixedTop.map { max(topInset, $0) } ?? margin
+        let cap = min(maxHeight, max(120, H - margin - reservedTop))
         let h = min(card.sizeThatFits(ProposedViewSize(width: w, height: cap)).height, cap)
         let hide = CGPoint(x: bounds.minX - 5000, y: bounds.minY - 5000)
         func clamp(_ v: CGFloat, _ lo: CGFloat, _ hi: CGFloat) -> CGFloat { min(max(v, lo), max(lo, hi)) }

@@ -225,6 +225,8 @@ export interface VisitDraft {
   planItemIds: string[];
   male: number;
   female: number;
+  /** Native app: total only, without assigning an unknown gender. Legacy clients omit this. */
+  guestCount?: number;
   /** 来店経路（VISIT_SOURCES のラベル）。未選択は '' */
   source: string;
   timed: boolean;
@@ -253,12 +255,17 @@ export const DEFAULT_VISIT_DRAFT: VisitDraft = {
  * 確定できない理由（現場向けの日本語）。確定できれば null。
  * requireSource: false のときは来店経路を選ばなくてよい（iPad アプリの来店登録。経路は会計で選ぶ。2026-10-24 Ronnie）
  */
+export function visitGuestCount(d: Pick<VisitDraft, 'male' | 'female' | 'guestCount'>): number {
+  return d.guestCount ?? d.male + d.female;
+}
+
 export function validateVisitDraft(d: VisitDraft, opts: { requireSource?: boolean } = {}): string | null {
   if (!Number.isInteger(d.male) || !Number.isInteger(d.female) || d.male < 0 || d.female < 0) {
     return '人数を確認してください';
   }
-  const guests = d.male + d.female;
-  if (guests < 1 || guests > MAX_GUESTS) return `合計人数を1〜${MAX_GUESTS}名で入力してください`;
+  const guests = visitGuestCount(d);
+  if (!Number.isInteger(guests) || guests < 1 || guests > MAX_GUESTS) return `合計人数を1〜${MAX_GUESTS}名で入力してください`;
+  if (d.guestCount !== undefined && d.male + d.female > guests) return '人数を確認してください';
   if (opts.requireSource === false ? !!d.source && !VISIT_SOURCE_LABELS.includes(d.source) : !d.source || !VISIT_SOURCE_LABELS.includes(d.source)) {
     return '来店経路を選択してください';
   }
@@ -365,10 +372,10 @@ export function parseCustomHm(hoursText: string, minutesText: string): string | 
 export function visitMemo(
   d: Pick<
     VisitDraft,
-    'plans' | 'male' | 'female' | 'source' | 'timed' | 'duration' | 'warningEnabled' | 'warningMinutes'
+    'plans' | 'male' | 'female' | 'guestCount' | 'source' | 'timed' | 'duration' | 'warningEnabled' | 'warningMinutes'
   >
 ): string {
-  const parts = [planNames(d.plans), `男${d.male}・女${d.female}`];
+  const parts = [planNames(d.plans), d.guestCount === undefined ? `男${d.male}・女${d.female}` : `人数${d.guestCount}名`];
   if (d.source) parts.push(String(d.source));
   if (d.timed) {
     parts.push(

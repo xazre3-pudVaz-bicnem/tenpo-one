@@ -1,6 +1,6 @@
 import { isUuid } from '@/lib/native-pos';
 import { parseDraft } from '@/lib/native-floor';
-import { HANDY_PLANS, type HandyPlan, type VisitDraft } from '@/lib/handy-visit';
+import { HANDY_PLANS, visitGuestCount, type HandyPlan, type VisitDraft } from '@/lib/handy-visit';
 
 /**
  * 着席中の「お客様情報」を、来店登録（お客様情報の確定）と同じ画面で直す（2026-10-24 Ronnie
@@ -34,7 +34,7 @@ export function parseNativeVisitEdit(raw: unknown): { ok: true; action: NativeVi
   if (b.type !== 'visitEdit' || !isUuid(b.orderId)) return { ok: false, error: '内容が正しくありません' };
   const draft = parseDraft(b.draft);
   if (!draft) return { ok: false, error: 'お客様情報を確認してください' };
-  if (draft.male + draft.female < 1) return { ok: false, error: '人数を入れてください' };
+  if (visitGuestCount(draft) < 1) return { ok: false, error: '人数を入れてください' };
   const courseId = b.courseId == null || b.courseId === '' ? null : b.courseId;
   if (courseId !== null && !isUuid(courseId)) return { ok: false, error: '内容が正しくありません' };
   return {
@@ -54,6 +54,7 @@ export interface VisitFromMemo {
   plans: HandyPlan[] | null;
   male: number | null;
   female: number | null;
+  guestCount?: number;
   source: string | null;
   timed: boolean;
   duration: number | null;
@@ -91,6 +92,8 @@ export function visitFromMemo(memo: string | null | undefined): VisitFromMemo | 
   const plans = names.map((n) => HANDY_PLANS.find((p) => p.name === n)?.id).filter((p): p is HandyPlan => !!p);
   if (plans.length > 0 && plans.length === names.length) out.plans = plans;
   for (const part of parts.slice(1)) {
+    const total = /^人数(\d+)名$/.exec(part);
+    if (total) { out.guestCount = Number(total[1]); continue; }
     const g = /^男(\d+)・女(\d+)$/.exec(part);
     if (g) {
       out.male = Number(g[1]);

@@ -16,6 +16,7 @@ struct NativeOrderView: View {
     @State private var editingPages = false
     /// お客様情報（人数・席の時間・モード・コース）の直し
     @State private var guestInfoOpen = false
+    @State private var printOpen = false
 
     /// startInCheckout：テーブルの「レジ会計」から開いたとき。オーダー画面を一瞬も見せず、最初から会計の画面
     /// （2026-10-24 Ronnie「1 sec lai order gamen aaucha、sidai 会計 ma jane banau」）
@@ -36,7 +37,7 @@ struct NativeOrderView: View {
                 let slipW = max(320, geo.size.width * 0.30)
                 let catW = max(150, geo.size.width * 0.13)
                 HStack(alignment: .top, spacing: 12) {
-                    SlipPanel(model: model, onBack: onHome, onClerk: { pickClerk = true }, onGuestInfo: { guestInfoOpen = true })
+                    SlipPanel(model: model, onBack: onHome, onClerk: { pickClerk = true }, onGuestInfo: { guestInfoOpen = true }, onPrint: { printOpen = true })
                         .frame(width: slipW)
                     VStack(spacing: 12) {
                         // 上のタブ（ページ）。Web と同じく2つ以上あるときだけ（テイクアウトは出さない）
@@ -143,6 +144,11 @@ struct NativeOrderView: View {
             }
         }
         .animation(.easeOut(duration: 0.15), value: guestInfoOpen)
+        .overlay {
+            if printOpen {
+                NativeOrderPrintPanel(model: model, onClose: { printOpen = false })
+            }
+        }
         // 会計は同じ画面の上に重ねる（fullScreenCover にすると、下の Web が止まって Bluetooth の印刷・ドロアが出ない）
         .overlay {
             if showCheckout {
@@ -382,8 +388,9 @@ private struct SlipPanel: View {
     /// 卓名の左の ← （上のバーの左のボタンと同じ「戻る」。2026-10-25 19:08 Ronnie「T10 ko left ma vayeko ← button pani click hune banau」）
     var onBack: () -> Void = {}
     var onClerk: () -> Void = {}
-    /// 人数・時間を押したとき（お客様情報の直し。卓のある伝票だけ）
+    /// 小さい「変更」を押したとき（お客様情報の直し。卓のある伝票だけ）
     var onGuestInfo: () -> Void = {}
+    var onPrint: () -> Void = {}
     /// 取消しようとしている品（送った品。店長以上の担当者を選んでから取消。Web のレジと同じ）
     @State private var cancelTarget: NPOrderLine?
 
@@ -401,22 +408,16 @@ private struct SlipPanel: View {
                 .padding(.trailing, -6)
                 .accessibilityLabel("戻る")
                 Text(model.order.tableName).font(.system(size: 32, weight: NT.strong)).foregroundColor(OV.ink)
-                Button(action: onGuestInfo) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.2")
-                        Text(verbatim: "\(model.order.guestCount)名")
-                        if canEditGuest { Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)) }
-                    }
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2")
+                    Text(verbatim: "\(model.order.guestCount)名")
+                }
                     .lineLimit(1)
                     .fixedSize()
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(NT.ink2)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(Capsule().fill(OV.soft))
-                }
-                .buttonStyle(PressableStyle())
-                .disabled(!canEditGuest)
-                .accessibilityLabel("お客様情報（人数・席の時間）を変更する")
                 Spacer()
                 Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink3)
             }
@@ -425,16 +426,28 @@ private struct SlipPanel: View {
 
             // 顧客・時間・担当
             VStack(alignment: .leading, spacing: 8) {
-                WrapLayout(spacing: 8) {
-                    chip(icon: "person", text: model.order.customerName ?? "顧客未設定")
-                    if let from = model.order.seatFrom, let to = model.order.seatTo {
-                        Button(action: onGuestInfo) { chip(icon: "clock", text: "\(from)〜\(to)") }
-                            .buttonStyle(PressableStyle())
-                            .disabled(!canEditGuest)
+                HStack(alignment: .top, spacing: 8) {
+                    WrapLayout(spacing: 8) {
+                        chip(icon: "person", text: model.order.customerName ?? "顧客未設定")
+                        if let from = model.order.seatFrom, let to = model.order.seatTo {
+                            chip(icon: "clock", text: "\(from)〜\(to)")
+                        }
+                        // 来店経路（booking source）
+                        let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
+                        chip(icon: "signpost.right", text: source?.label ?? "経路なし")
                     }
-                    // 来店経路（booking source）
-                    let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
-                    chip(icon: "signpost.right", text: source?.label ?? "経路なし")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if canEditGuest {
+                        Button(action: onGuestInfo) {
+                            Label("変更", systemImage: "pencil")
+                                .font(.system(size: 13, weight: .medium)).foregroundColor(NT.purple)
+                                .padding(.horizontal, 10).frame(height: 36)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(NT.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle())
+                        .accessibilityLabel("人数・プラン・時間を変更")
+                    }
                 }
                 Button(action: onClerk) {
                     HStack(spacing: 4) {
@@ -493,8 +506,16 @@ private struct SlipPanel: View {
                         .contentTransition(.numericText())
                         .animation(.easeOut(duration: 0.15), value: model.total)
                 }
-                // 伝票の操作（新しい伝票・まとめる・卓を移動・会計伝票・注文取消）はオーダー画面に出さない。
-                // テーブルのポップアップから（2026-10-24 Ronnie「order vitra yo pardaina」）
+                Button(action: onPrint) {
+                    Label("印刷 / Print", systemImage: "printer")
+                        .font(.system(size: 15, weight: .medium))
+                        .foregroundColor(OV.primary)
+                        .frame(maxWidth: .infinity).frame(height: 42)
+                        .background(RoundedRectangle(cornerRadius: 10).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 10).stroke(OV.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+                .disabled(model.busy || !model.isLive)
             }
             .padding(.horizontal, 16).padding(.bottom, 14)
         }

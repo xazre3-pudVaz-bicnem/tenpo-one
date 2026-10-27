@@ -396,6 +396,9 @@ struct NativeLedgerView: View {
     var onWeb: (String) -> Void = { _ in }
 
     @State private var selected: NLReservation?
+    @StateObject private var tablePopupModel = NativeFloorModel()
+    @State private var tablePopupId: String?
+    @State private var tablePopupOrderId: String?
     @State private var newOpen = false
     @State private var inboxOpen = false
     /// スケジュールの空いたマスを押した（その場の受付）
@@ -496,6 +499,16 @@ struct NativeLedgerView: View {
         .sheet(item: $selected) { r in
             NativeReservationSheet(model: model, reservation: r, onClose: { selected = nil }, onOpenOrder: { id in selected = nil; onOpenOrder(id) })
         }
+        .overlay {
+            if let id = tablePopupId, let table = tablePopupModel.tables.first(where: { $0.id == id }) {
+                NativeTableSheet(model: tablePopupModel, table: table, anchor: nil, onClose: closeTablePopup,
+                                 onOpenOrder: { orderId, checkout in
+                                     closeTablePopup()
+                                     if checkout { AppState.shared.openNativeOrder(orderId, checkout: true) }
+                                     else { onOpenOrder(orderId) }
+                                 }, preferredOrderId: tablePopupOrderId)
+            }
+        }
         // 予約登録は画面いっぱいの 1 枚（左＝日時・人数・おすすめのテーブル、右＝お客様・キーワード。2026-10-24 19:36 Ronnie）
         .fullScreenCover(isPresented: $newOpen) {
             NativeReservationEntry(model: model, prefill: slotPrefill, onClose: { newOpen = false; slotPrefill = nil }, onWalkIn: {
@@ -518,7 +531,7 @@ struct NativeLedgerView: View {
         // Web の ?open=<予約>：読めたら詳細を出す
         .onChange(of: model.openReservationId) { id in
             guard let id else { return }
-            if let r = model.payload?.reservations.first(where: { $0.id == id }) { selected = r } else { model.show(toast: "この予約は台帳の表示対象外です（キャンセル済みなど）") }
+            if let r = model.payload?.reservations.first(where: { $0.id == id }) { selectReservation(r) } else { model.show(toast: "この予約は台帳の表示対象外です（キャンセル済みなど）") }
             model.openReservationId = nil
         }
         // Web の ?view=messages：メッセージを開く（受付管理 inbox は上の 予約受付 が開く）
@@ -542,9 +555,33 @@ struct NativeLedgerView: View {
     }
 
     private func applyFloor(_ p: NFPayload, fresh: Bool) {
+        tablePopupModel.payload = p
+        tablePopupModel.now = p.serverNow
         let tables = NativeFloorOffline.overlay(p.tables, storeId: p.store.id, stayMinutes: p.stayMinutes)
         floorTables = Dictionary(tables.map { ($0.id, $0) }, uniquingKeysWith: { a, _ in a })
         if fresh { floorOffsetMs = p.serverNow - Date().timeIntervalSince1970 * 1000 }
+    }
+
+    /// A seated party uses exactly the same popup as its table on the floor.
+    /// Upcoming and completed bookings keep their reservation details and cancellation tools.
+    private func selectReservation(_ r: NLReservation) {
+        if model.payload?.isToday == true, ["seated", "billing"].contains(r.status),
+           let table = tablePopupModel.tables.first(where: { r.tableIds.contains($0.id) && $0.order?.slips.contains(where: { $0.reservationId == r.id }) == true }),
+           let slip = table.order?.slips.first(where: { $0.reservationId == r.id }) {
+            tablePopupId = table.id
+            tablePopupOrderId = slip.id
+        } else {
+            selected = r
+        }
+    }
+
+    private func closeTablePopup() {
+        tablePopupId = nil
+        tablePopupOrderId = nil
+        Task {
+            await model.refresh(silent: true)
+            if let p = try? await NativeAPI.shared.loadFloor(storeId: nil) { applyFloor(p, fresh: true) }
+        }
     }
 
     /// 来店中（来店・着席・会計待ち）の予約が座っている卓の、オーダー・会計と同じ状態と残り時間
@@ -1155,7 +1192,7 @@ struct NativeLedgerView: View {
                     let ink: Color = fs == nil ? .white : NLColor.ink
                     let stateInk: Color = fs.map { $0.band.ink == .white ? $0.band.color : NLColor.navy } ?? .white
                     // 箱は全部同じ色（見出しのネイビーを少し明るく）。入り口の印だけ各社の色で小さく。ウォークインは左の帯が紫
-                    Button { selected = r } label: {
+                    Button { selectReservation(r) } label: {
                         HStack(spacing: 0) {
                             Rectangle().fill(r.createdVia == "walk_in" ? NLColor.walkIn : NLColor.navy).frame(width: 5)
                             VStack(alignment: .leading, spacing: 2) {
@@ -1284,7 +1321,7 @@ struct NativeLedgerView: View {
                             ForEach(g.rows) { r in
                                 let late = model.isLate(r)
                                 let tone = NLColor.tone(r.status, late: late)
-                                Button { selected = r } label: {
+                                Button { selectReservation(r) } label: {
                                     HStack(spacing: 12) {
                                         Text("\(nlHm(nlJstMinutes(r.startAt, dayStart: p.date)))〜\(nlHm(nlJstMinutes(r.endAt, dayStart: p.date)))").font(.system(size: 13, weight: .bold)).monospacedDigit().foregroundColor(NLColor.blue)
                                         Text(r.partyLabel).font(.system(size: 13, weight: .bold)).monospacedDigit()
@@ -1337,7 +1374,7 @@ struct NativeLedgerView: View {
                 ForEach(rows) { r in
                     let late = model.isLate(r)
                     let tone = NLColor.tone(r.status, late: late)
-                    Button { selected = r } label: {
+                    Button { selectReservation(r) } label: {
                         HStack(spacing: 14) {
                             Rectangle().fill(NLColor.bar(r.status, late: late)).frame(width: 5, height: 44).clipShape(Capsule())
                             Text("\(nlHm(nlJstMinutes(r.startAt, dayStart: p.date)))〜\(nlHm(nlJstMinutes(r.endAt, dayStart: p.date)))")

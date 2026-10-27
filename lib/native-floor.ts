@@ -111,6 +111,7 @@ export function parseDraft(raw: unknown): VisitDraft | null {
   const planItemIds = d.planItemIds ?? [];
   if (!Array.isArray(planItemIds) || planItemIds.length > 30 || !planItemIds.every(isUuid)) return null;
   if (!isInt(d.male, 0, MAX_GUESTS) || !isInt(d.female, 0, MAX_GUESTS)) return null;
+  if (d.guestCount !== undefined && (!isInt(d.guestCount, 1, MAX_GUESTS) || d.male + d.female > d.guestCount)) return null;
   const source = typeof d.source === 'string' ? d.source : '';
   if (source && !VISIT_SOURCE_LABELS.includes(source)) return null;
   const timed = d.timed === true;
@@ -126,6 +127,7 @@ export function parseDraft(raw: unknown): VisitDraft | null {
     planItemIds: [...new Set(planItemIds as string[])],
     male: d.male as number,
     female: d.female as number,
+    ...(d.guestCount === undefined ? {} : { guestCount: d.guestCount as number }),
     source,
     timed,
     duration: duration as number,

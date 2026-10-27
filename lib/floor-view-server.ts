@@ -260,6 +260,7 @@ export async function loadFloorView(
     const prev = orderByTable.get(o.table_id);
     const slip = {
       id: o.id,
+      reservationId: resv?.id ?? null,
       orderNo: o.order_no ?? 0,
       openedAtMs,
       guestCount: o.guest_count,
