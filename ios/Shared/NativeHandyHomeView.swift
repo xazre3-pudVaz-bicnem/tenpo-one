@@ -894,9 +894,7 @@ struct NativePhoneTableTile: View {
                         Image(systemName: "link").font(.system(size: 10 * s, weight: .bold)).foregroundColor(NFColor.royal)
                     }
                     if let mark = NativeTableCard.padMarks(order).first {
-                        Image(systemName: mark).font(.system(size: 9 * s, weight: .semibold)).foregroundColor(.white)
-                            .frame(width: 16 * s, height: 16 * s)
-                            .background(RoundedRectangle(cornerRadius: 5 * s, style: .continuous).fill(OV.primary))
+                        NFMarkIcon(symbol: mark, size: 16 * s)
                     }
                     Spacer(minLength: 0)
                     if let o = order {

@@ -642,7 +642,7 @@ struct NativeLedgerView: View {
                 .buttonStyle(PressableStyle())
                 .accessibilityLabel("ホーム")
                 // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
-                HStack(alignment: .firstTextBaseline, spacing: 8) {
+                VStack(alignment: .leading, spacing: 0) {
                     Text("店舗台帳").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                     Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
                 }

@@ -257,7 +257,7 @@ struct NativePettyView: View {
                         } else {
                             npCard { VStack(spacing: 0) { pettyHeader(p); ForEach(p.rows) { r in pettyRow(r, p) } } }
                         }
-                        HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        VStack(alignment: .leading, spacing: 0) {
                             Text("実査履歴").font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.navy)
                             Text("Counts").font(.system(size: 11)).foregroundColor(NFColor.ink3)
                         }

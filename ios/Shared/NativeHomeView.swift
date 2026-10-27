@@ -510,7 +510,7 @@ struct NativeHomeView: View {
                         .lineLimit(1).minimumScaleFactor(0.6)
                     HStack(alignment: .top, spacing: 36) {
                         VStack(alignment: .leading, spacing: 4) {
-                            HStack(alignment: .firstTextBaseline, spacing: 6) {
+                            VStack(alignment: .leading, spacing: 0) {
                                 Text("予算売上高").font(.system(size: 14, weight: .medium))
                                 Text("Target").font(.system(size: 12))
                             }
