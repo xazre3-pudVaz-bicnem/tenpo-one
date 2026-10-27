@@ -13,7 +13,7 @@ struct NativeOrderGuestInfo: View {
     @State private var problem: String?
 
     var body: some View {
-        NativeModalCard(width: 760) {
+        NativeModalCard(width: 900) {
             if let t = target {
                 NativeSetupSheet(model: floor, table: t.table, edit: NFVisitEdit(order: t.order, slip: t.slip),
                                  onClose: finish, onStarted: { _ in finish() })

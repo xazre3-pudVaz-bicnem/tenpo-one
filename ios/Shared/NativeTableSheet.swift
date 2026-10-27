@@ -54,8 +54,8 @@ struct NativeTableSheet: View {
             // 押した卓のところに、矢印つきで出す（下 → 上 → 横の順に入る所。iPad のポップオーバーと同じ。2026-10-24 Ronnie）
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
             // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
-            // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
-            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil, fixedTop: 64) {
+            // 2026-10-27: Center vertically as well as horizontally; widen only the guest editor.
+            NFPopoverLayout(width: (!seated || guestEditorOpen) ? 900 : Self.width, maxHeight: 760, anchor: nil) {
                 popup
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(180))
@@ -237,10 +237,11 @@ struct NativeTableSheet: View {
         // 細く 2 列に：注文（左・縦長）｜レジ会計・会計伝票（右に縦）、その下に 移動｜合算、グループ｜支払メモ
         // （2026-10-27 19:06 Ronnie「alli slim banau: oder check out / 会計伝票 / move merge / group memo」）
         // 注文｜レジ会計（同じ大きさ）、その下に会計伝票を横長く（2026-10-27 19:39 Ronnie「注文 レジ会計 same button、会計伝票 横ながい、したのはそのまま」）
+        if !guestEditorOpen {
         HStack(alignment: .top, spacing: 8) {
             // 注文も白い箱（濃い色だと選んだように見える（2026-10-27 10:25 Ronnie「yo color le garda pahilai select vaye jasto dekhiyo so sabai normal banau」））
             // 注文・会計は縦長く、上に線の印（2026-10-27 19:42・19:47 Ronnie「注文 会計 button alli thulo、立ながい、かっこい」）
-            bigButton("注文", en: "Order", icon: "fork.knife", fill: .white, textColor: Self.ink, border: Self.line, height: 116, size: 22) {
+            bigButton("注文", en: "Order", icon: "fork.knife", fill: Self.primary.opacity(0.045), textColor: Self.ink, border: Self.line, height: 116, size: 22) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
@@ -252,12 +253,12 @@ struct NativeTableSheet: View {
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
             // 注文＝紫紺、レジ会計・会計伝票＝白い箱（黒・緑にしない。2026-10-27 02:48 Ronnie「会計伝票 black ma pani pardaina」）
             // 「レジ会計」→「会計」（2026-10-27 19:39 Ronnie「レジ会計 lai 会計 matra banau」）
-            bigButton("会計", en: "Checkout", icon: "yensign.circle", fill: .white, textColor: Self.ink, border: Self.line, height: 116, size: 22, enabled: selected != nil) {
+            bigButton("会計", en: "Checkout", icon: "yensign.circle", fill: Color(hex: 0xF2D06B).opacity(0.15), textColor: Self.ink, border: Self.line, height: 116, size: 22, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
         }
         // 会計伝票はポップアップにも残す（2026-10-27 19:03 Ronnie「会計伝票 ないね」）
-            bigButton("会計伝票", en: "Print bill", icon: "printer", iconInline: true, fill: .white, textColor: Self.ink, border: Self.line, height: 56, size: 18, enabled: selected != nil) {
+            bigButton("会計伝票", en: "Print bill", icon: "printer", iconInline: false, fill: Self.primary.opacity(0.045), textColor: Self.ink, border: Self.line, height: 88, size: 18, enabled: selected != nil) {
                 Task {
                     guard let s = selected else { return }
                     // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで。無いときだけその卓のフロアのプリンター（floorBill）
@@ -293,6 +294,7 @@ struct NativeTableSheet: View {
                 memoText = ""
                 panel = panel == .memo ? nil : .memo
             }
+        }
         }
         if let o = table.order, let slip = selected {
             // 人数・時間・プランと「変更」は上の見出しの行に
@@ -566,8 +568,8 @@ struct NativeTableSheet: View {
     /// Web の PopBtn（白地・罫線。選択中は青、取消系は赤）
     private func popBtn(_ ja: String, en: String, icon: String? = nil, on: Bool = false, danger: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            HStack(spacing: 8) {
-                // どのボタンも左に線の印（そろえる。2026-10-27 19:55 Ronnie）
+            VStack(spacing: 4) {
+                // Icon above its label, using the existing brand palette.
                 if let icon {
                     Image(systemName: icon).font(.system(size: 17, weight: .regular))
                         .foregroundColor(on ? .white : (danger ? NFColor.danger : Self.primary))
@@ -578,9 +580,9 @@ struct NativeTableSheet: View {
             }
             }
             .foregroundColor(on ? .white : (danger ? NFColor.danger : NFColor.navy))
-            .frame(maxWidth: .infinity).frame(height: 52)
+            .frame(maxWidth: .infinity).frame(height: 76)
             .padding(.horizontal, 4)
-            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? Self.primary : (danger ? NFColor.danger.opacity(0.08) : Color.white)))
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? Self.primary : (danger ? NFColor.danger.opacity(0.08) : Self.primary.opacity(0.045))))
             .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? Color.clear : (danger ? NFColor.danger.opacity(0.25) : Self.line), lineWidth: 1))
         }
         .buttonStyle(PressableStyle())

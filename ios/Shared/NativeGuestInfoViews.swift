@@ -185,8 +185,18 @@ struct NativeSetupSheet: View {
 
     /// 来店経路の列は出さない（会計で選ぶ）
     private var columns: some View {
-        AnyView(leftColumn).frame(maxWidth: .infinity)
-            .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 8)
+        ViewThatFits(in: .horizontal) {
+            HStack(alignment: .top, spacing: 16) {
+                leftColumn.frame(width: 390)
+                card { guestPad.padding(10) }
+                    .frame(width: 390)
+            }
+            VStack(spacing: 12) {
+                leftColumn
+                card { guestPad.padding(10) }
+            }
+        }
+        .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 12)
     }
 
     // MARK: 左の列
@@ -249,9 +259,6 @@ struct NativeSetupSheet: View {
                         Color.clear.frame(width: 64, height: 32)
                     }
                 }
-            }
-            card {
-                guestPad.padding(10)
             }
         }
     }
