@@ -388,7 +388,7 @@ private struct SlipPanel: View {
     /// 卓名の左の ← （上のバーの左のボタンと同じ「戻る」。2026-10-25 19:08 Ronnie「T10 ko left ma vayeko ← button pani click hune banau」）
     var onBack: () -> Void = {}
     var onClerk: () -> Void = {}
-    /// 人数・時間を押したとき（お客様情報の直し。卓のある伝票だけ）
+    /// 小さい「変更」を押したとき（お客様情報の直し。卓のある伝票だけ）
     var onGuestInfo: () -> Void = {}
     var onPrint: () -> Void = {}
     /// 取消しようとしている品（送った品。店長以上の担当者を選んでから取消。Web のレジと同じ）
@@ -408,22 +408,16 @@ private struct SlipPanel: View {
                 .padding(.trailing, -6)
                 .accessibilityLabel("戻る")
                 Text(model.order.tableName).font(.system(size: 32, weight: NT.strong)).foregroundColor(OV.ink)
-                Button(action: onGuestInfo) {
-                    HStack(spacing: 4) {
-                        Image(systemName: "person.2")
-                        Text(verbatim: "\(model.order.guestCount)名")
-                        if canEditGuest { Image(systemName: "chevron.down").font(.system(size: 10, weight: .bold)) }
-                    }
+                HStack(spacing: 4) {
+                    Image(systemName: "person.2")
+                    Text(verbatim: "\(model.order.guestCount)名")
+                }
                     .lineLimit(1)
                     .fixedSize()
                     .font(.system(size: 15, weight: .bold))
                     .foregroundColor(NT.ink2)
                     .padding(.horizontal, 10).padding(.vertical, 6)
                     .background(Capsule().fill(OV.soft))
-                }
-                .buttonStyle(PressableStyle())
-                .disabled(!canEditGuest)
-                .accessibilityLabel("お客様情報（人数・席の時間）を変更する")
                 Spacer()
                 Text(verbatim: model.order.noLabel).font(.system(size: 14, weight: .semibold)).foregroundColor(NT.ink3)
             }
@@ -432,16 +426,28 @@ private struct SlipPanel: View {
 
             // 顧客・時間・担当
             VStack(alignment: .leading, spacing: 8) {
-                WrapLayout(spacing: 8) {
-                    chip(icon: "person", text: model.order.customerName ?? "顧客未設定")
-                    if let from = model.order.seatFrom, let to = model.order.seatTo {
-                        Button(action: onGuestInfo) { chip(icon: "clock", text: "\(from)〜\(to)") }
-                            .buttonStyle(PressableStyle())
-                            .disabled(!canEditGuest)
+                HStack(alignment: .top, spacing: 8) {
+                    WrapLayout(spacing: 8) {
+                        chip(icon: "person", text: model.order.customerName ?? "顧客未設定")
+                        if let from = model.order.seatFrom, let to = model.order.seatTo {
+                            chip(icon: "clock", text: "\(from)〜\(to)")
+                        }
+                        // 来店経路（booking source）
+                        let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
+                        chip(icon: "signpost.right", text: source?.label ?? "経路なし")
                     }
-                    // 来店経路（booking source）
-                    let source = (NPVisitSource.defaults + NPVisitSource.extras).first { $0.id == model.order.visitSourceId }
-                    chip(icon: "signpost.right", text: source?.label ?? "経路なし")
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    if canEditGuest {
+                        Button(action: onGuestInfo) {
+                            Label("変更", systemImage: "pencil")
+                                .font(.system(size: 13, weight: .medium)).foregroundColor(NT.purple)
+                                .padding(.horizontal, 10).frame(height: 36)
+                                .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(NT.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle())
+                        .accessibilityLabel("人数・プラン・時間を変更")
+                    }
                 }
                 Button(action: onClerk) {
                     HStack(spacing: 4) {
