@@ -28,7 +28,7 @@ struct NativeTableSheet: View {
 
     // 少し広く・ボタンを大きく（2026-10-24 Ronnie「横と縦をちょっと広く、ボタンを見やすく押しやすく」）
     /// 細く（2026-10-27 19:06 Ronnie「alli slim banau」）
-    private static let width: CGFloat = 460
+    private static let width: CGFloat = 420
 
     private var now: Double { model.now }
     private var slips: [NFSlip] { table.order?.slips ?? [] }
@@ -236,9 +236,11 @@ struct NativeTableSheet: View {
         // 人数・顧客・来店・金額のまとめは出さない（卓の箱に出ている。2026-10-24 Ronnie「ポップアップに金額などの詳細は要らない」）
         // 細く 2 列に：注文（左・縦長）｜レジ会計・会計伝票（右に縦）、その下に 移動｜合算、グループ｜支払メモ
         // （2026-10-27 19:06 Ronnie「alli slim banau: oder check out / 会計伝票 / move merge / group memo」）
+        // 注文｜レジ会計（同じ大きさ）、その下に会計伝票を横長く（2026-10-27 19:39 Ronnie「注文 レジ会計 same button、会計伝票 横ながい、したのはそのまま」）
         HStack(alignment: .top, spacing: 8) {
             // 注文も白い箱（濃い色だと選んだように見える（2026-10-27 10:25 Ronnie「yo color le garda pahilai select vaye jasto dekhiyo so sabai normal banau」））
-            bigButton("注文", en: "Order", fill: .white, textColor: Self.ink, border: Self.line, height: 128, size: 22) {
+            // 注文・会計は縦長く、上に線の印（2026-10-27 19:42・19:47 Ronnie「注文 会計 button alli thulo、立ながい、かっこい」）
+            bigButton("注文", en: "Order", icon: "fork.knife", fill: .white, textColor: Self.ink, border: Self.line, height: 116, size: 22) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
@@ -249,12 +251,13 @@ struct NativeTableSheet: View {
             }
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
             // 注文＝紫紺、レジ会計・会計伝票＝白い箱（黒・緑にしない。2026-10-27 02:48 Ronnie「会計伝票 black ma pani pardaina」）
-            VStack(spacing: 8) {
-            bigButton("レジ会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 60, size: 18, enabled: selected != nil) {
+            // 「レジ会計」→「会計」（2026-10-27 19:39 Ronnie「レジ会計 lai 会計 matra banau」）
+            bigButton("会計", en: "Checkout", icon: "yensign.circle", fill: .white, textColor: Self.ink, border: Self.line, height: 116, size: 22, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
-            // 会計伝票はポップアップにも残す（注文・レジ会計と同じ行。2026-10-27 19:03 Ronnie「会計伝票 ないね」）
-            bigButton("会計伝票", en: "Print bill", fill: .white, textColor: Self.ink, border: Self.line, height: 60, size: 18, enabled: selected != nil) {
+        }
+        // 会計伝票はポップアップにも残す（2026-10-27 19:03 Ronnie「会計伝票 ないね」）
+            bigButton("会計伝票", en: "Print bill", icon: "printer", iconInline: true, fill: .white, textColor: Self.ink, border: Self.line, height: 56, size: 18, enabled: selected != nil) {
                 Task {
                     guard let s = selected else { return }
                     // ネットあり：どのフロアの卓でもこの iPad のレシートプリンターで。無いときだけその卓のフロアのプリンター（floorBill）
@@ -275,20 +278,18 @@ struct NativeTableSheet: View {
                     }
                 }
             }
-            }
-        }
         divider
         HStack(spacing: 8) {
             // 卓の移動はこのポップアップで（オーダー画面には伝票の操作を出さない。2026-10-24 Ronnie「order vitra yo pardaina」）
-            popBtn("テーブル移動", en: "Move", on: panel == .move, enabled: selected != nil) { panel = panel == .move ? nil : .move }
-            popBtn("テーブル合算", en: "Merge", on: panel == .merge, enabled: selected != nil) { panel = panel == .merge ? nil : .merge }
+            popBtn("テーブル移動", en: "Move", icon: "arrow.left.arrow.right", on: panel == .move, enabled: selected != nil) { panel = panel == .move ? nil : .move }
+            popBtn("テーブル合算", en: "Merge", icon: "arrow.triangle.merge", on: panel == .merge, enabled: selected != nil) { panel = panel == .merge ? nil : .merge }
         }
         HStack(spacing: 8) {
-            popBtn("グループ設定", en: "Group", on: groupOpen, enabled: canOperate) {
+            popBtn("グループ設定", en: "Group", icon: "square.grid.2x2", on: groupOpen, enabled: canOperate) {
                 groupPick = table.groupTableIds.isEmpty ? [table.id] : table.groupTableIds
                 groupOpen.toggle()
             }
-            popBtn("支払メモ", en: "Payment note", on: panel == .memo, enabled: selected != nil) {
+            popBtn("支払メモ", en: "Payment note", icon: "square.and.pencil", on: panel == .memo, enabled: selected != nil) {
                 memoText = ""
                 panel = panel == .memo ? nil : .memo
             }
@@ -517,11 +518,21 @@ struct NativeTableSheet: View {
     static let ink = Color(hex: 0x2B2740)
     static let line = Color(hex: 0xE3E5EA)
 
-    private func bigButton(_ ja: String, en: String?, fill: Color, textColor: Color = .white, border: Color? = nil, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    /// iconInline：横長のボタンは印を字の左に（会計伝票・移動・合算…。2026-10-27 19:55 Ronnie「yesma ni sign banau」）
+    private func bigButton(_ ja: String, en: String?, icon: String? = nil, iconInline: Bool = false, fill: Color, textColor: Color = .white, border: Color? = nil, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
+            HStack(spacing: 10) {
+                if let icon, iconInline {
+                    Image(systemName: icon).font(.system(size: 20, weight: .regular)).foregroundColor(Self.primary)
+                }
             VStack(spacing: 0) {
+                if let icon, !iconInline {
+                    Image(systemName: icon).font(.system(size: 26, weight: .regular)).foregroundColor(Self.primary)
+                        .frame(height: 34).padding(.bottom, 4)
+                }
                 Text(ja).font(.system(size: size, weight: NT.strong))
                 if let en { Text(en).font(.system(size: 12, weight: .semibold)).opacity(0.8) }
+            }
             }
             .foregroundColor(textColor)
             .frame(maxWidth: .infinity).frame(height: height)
@@ -553,11 +564,18 @@ struct NativeTableSheet: View {
     }
 
     /// Web の PopBtn（白地・罫線。選択中は青、取消系は赤）
-    private func popBtn(_ ja: String, en: String, on: Bool = false, danger: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    private func popBtn(_ ja: String, en: String, icon: String? = nil, on: Bool = false, danger: Bool = false, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
+            HStack(spacing: 8) {
+                // どのボタンも左に線の印（そろえる。2026-10-27 19:55 Ronnie）
+                if let icon {
+                    Image(systemName: icon).font(.system(size: 17, weight: .regular))
+                        .foregroundColor(on ? .white : (danger ? NFColor.danger : Self.primary))
+                }
             VStack(spacing: 0) {
                 Text(ja).font(.system(size: 16, weight: .bold)).lineLimit(1).minimumScaleFactor(0.8)
                 Text(en).font(.system(size: 11, weight: .semibold)).foregroundColor(on ? .white.opacity(0.8) : NFColor.ink3)
+            }
             }
             .foregroundColor(on ? .white : (danger ? NFColor.danger : NFColor.navy))
             .frame(maxWidth: .infinity).frame(height: 52)
