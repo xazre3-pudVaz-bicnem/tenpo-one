@@ -88,6 +88,8 @@ struct NativeSetupSheet: View {
     @State private var problem: String?
     /// 小さなポップアップ（モード・プラン・時間制・終了前注意・開始時間）
     @State private var popup: NFSetupPopup?
+    /// 人数のテンキー：もう 1 けためを打ったか（最初の数字は前の人数を置きかえる）
+    @State private var guestTyped = false
     /// テンキーの数（ポップアップの中で入れる）
     @State private var padText = ""
     @State private var padReplaceOnDigit = false
@@ -160,26 +162,7 @@ struct NativeSetupSheet: View {
                 if let problem {
                     Text(problem).font(.system(size: 13)).foregroundColor(NFColor.danger).lineLimit(2)
                 }
-                HStack(spacing: 12) {
-                    Button(action: onClose) {
-                        Text("キャンセル").font(.system(size: 18, weight: .bold)).foregroundColor(GIColor.navy)
-                            .frame(maxWidth: .infinity).frame(height: 56)
-                            .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
-                            .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GIColor.line, lineWidth: 1.2))
-                    }
-                    .buttonStyle(PressableStyle(scale: 0.98))
-                    Button { Task { await confirm() } } label: {
-                        VStack(spacing: 0) {
-                            Text(saving ? (edit == nil ? "作成中…" : "保存中…") : (edit == nil ? "確定" : "保存する")).font(.system(size: 20, weight: NT.strong))
-                            Text(edit == nil ? "Start order" : "Save").font(.system(size: 11, weight: .bold)).opacity(0.8)
-                        }
-                        .foregroundColor(.white)
-                        .frame(maxWidth: .infinity).frame(height: 56)
-                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(canConfirm ? GIColor.blue : GIColor.blue.opacity(0.35)))
-                    }
-                    .buttonStyle(PressableStyle(scale: 0.98))
-                    .disabled(!canConfirm)
-                }
+                // キャンセル・確定は人数のテンキーの右へ（2026-10-27 19:35 Ronnie「sidai keyboard rakhdeu、1234 pardaina、milayera rakha」）
             }
             .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 14)
             .background(NFColor.lilacSoft)
@@ -256,7 +239,7 @@ struct NativeSetupSheet: View {
                 }
             }
             card {
-                countRow("人数", en: "Guests", value: $guests, target: .guests).padding(10)
+                guestPad.padding(10)
             }
         }
     }
@@ -563,7 +546,8 @@ struct NativeSetupSheet: View {
 
     private func setButton(enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text("変更").font(.system(size: 14, weight: .medium)).foregroundColor(GIColor.navy)
+            // 時間の横のボタンは「設定」（2026-10-27 19:35 Ronnie「time ko side ma 変更 lai 設定 banau」）
+            Text("設定").font(.system(size: 14, weight: .medium)).foregroundColor(GIColor.navy)
                 .frame(width: 64, height: 32)
                 .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
                 .overlay(RoundedRectangle(cornerRadius: 10).stroke(GIColor.line, lineWidth: 1))
@@ -643,6 +627,74 @@ struct NativeSetupSheet: View {
     private func setStart(hour: Int, minute: Int) {
         startDate = nfResolveStart(hour: hour, minute: minute)
         startChanged = true
+    }
+
+    /// 人数：テンキーをそのまま出す（1〜5 のボタンはやめる）。右にキャンセル・確定
+    /// （2026-10-27 19:35 Ronnie「sidai keyboard rakhdeu、1234 pardaina、milayera rakha」。店舗台帳の受付のテンキーと同じ並び）
+    private var guestPad: some View {
+        HStack(alignment: .top, spacing: 10) {
+            VStack(spacing: 8) {
+                HStack(alignment: .lastTextBaseline) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("人数").font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink2)
+                        Text("Guests").font(.system(size: 10)).foregroundColor(NFColor.ink3)
+                    }
+                    Spacer(minLength: 4)
+                    Text(guests > 0 ? "\(guests)" : "—").font(.system(size: 30, weight: .semibold)).monospacedDigit().foregroundColor(NFColor.ink)
+                    Text("名").font(.system(size: 14)).foregroundColor(NFColor.ink3)
+                }
+                .padding(.horizontal, 4)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(["7", "8", "9", "4", "5", "6", "1", "2", "3", "C", "0", "⌫"], id: \.self) { k in
+                        Button { guestKey(k) } label: {
+                            Group {
+                                if k == "⌫" { Image(systemName: "delete.left") } else { Text(k) }
+                            }
+                            .font(.system(size: 22, weight: .medium)).monospacedDigit()
+                            .foregroundColor(k == "C" ? NFColor.danger : NFColor.ink)
+                            .frame(maxWidth: .infinity).frame(height: 48)
+                            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+                            .overlay(RoundedRectangle(cornerRadius: 10, style: .continuous).stroke(GIColor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle(scale: 0.94))
+                    }
+                }
+            }
+            VStack(spacing: 8) {
+                Button { Task { await confirm() } } label: {
+                    VStack(spacing: 2) {
+                        Text(saving ? (edit == nil ? "作成中…" : "保存中…") : (edit == nil ? "確定" : "保存する")).font(.system(size: 20, weight: NT.strong))
+                        Text(edit == nil ? "Start order" : "Save").font(.system(size: 11, weight: .bold)).opacity(0.8)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(canConfirm ? GIColor.blue : GIColor.blue.opacity(0.35)))
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+                .disabled(!canConfirm)
+                Button(action: onClose) {
+                    Text("キャンセル").font(.system(size: 16, weight: .bold)).foregroundColor(GIColor.navy)
+                        .frame(maxWidth: .infinity).frame(height: 52)
+                        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(GIColor.line, lineWidth: 1.2))
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+            }
+            .frame(width: 140)
+            .frame(maxHeight: .infinity)
+        }
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    /// テンキーの 1 押し：最初の数字は今の人数を置きかえる。C＝0、⌫＝1 けた消す
+    private func guestKey(_ k: String) {
+        switch k {
+        case "C": guests = 0; guestTyped = false
+        case "⌫": guests /= 10; guestTyped = true
+        default:
+            guard let d = Int(k) else { return }
+            if !guestTyped { guests = d; guestTyped = true } else if guests * 10 + d <= 999 { guests = guests * 10 + d }
+        }
     }
 
     /// 1〜5 のクイック選択と、人数を直接入力するテンキー。
