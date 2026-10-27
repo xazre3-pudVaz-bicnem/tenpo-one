@@ -579,6 +579,10 @@
 			isa = PBXBuildFile;
 			fileRef = "6AA2061336D569F1887EA5C0";
 		};
+		B710A3B614D2D189EF3CBB9D = {
+			isa = PBXBuildFile;
+			fileRef = A2C36FBE22CC9CA447281F7C;
+		};
 		B8536478B73145A706D777F8 = {
 			isa = PBXBuildFile;
 			fileRef = CF4F0FABF0E201DB6F583CF2;
@@ -726,6 +730,10 @@
 		D8793C977E449CDC8591B028 = {
 			isa = PBXBuildFile;
 			fileRef = B154CE8F2B099465DD22FBC2;
+		};
+		DA178582417882BB64846717 = {
+			isa = PBXBuildFile;
+			fileRef = "422C86E4A6D1A1FBC0EA3A63";
 		};
 		DEE5446F10835A20370820F1 = {
 			isa = PBXBuildFile;
@@ -1133,6 +1141,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeCashIoView.swift;
+			sourceTree = "<group>";
+		};
+		422C86E4A6D1A1FBC0EA3A63 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeOrderPrintPanel.swift;
 			sourceTree = "<group>";
 		};
 		43943BBD5C27D2BC8E4E3E2A = {
@@ -1601,6 +1615,12 @@
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
 			path = NativeCheckoutView.swift;
+			sourceTree = "<group>";
+		};
+		A2C36FBE22CC9CA447281F7C = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = NativeNumberKeypad.swift;
 			sourceTree = "<group>";
 		};
 		A33B001E9138B86048047F4F = {
@@ -2169,6 +2189,7 @@
 				"70EA4E009ED16B894C2C3758",
 				"74ECA6564C2380BAF1A08890",
 				FEA15291AD341F30A11A10ED,
+				A2C36FBE22CC9CA447281F7C,
 				"342C408BDB47AA24C3D43C91",
 				"08468FEB7E2D64B0D1DAC0B7",
 				"3E54DC20A9B17AB52FD4146D",
@@ -2177,6 +2198,7 @@
 				"3D3077E5E7F51ABDF8FD96C5",
 				"18FF8B8BD2876DF662F311FE",
 				"770BFACE13DD13AC70580416",
+				"422C86E4A6D1A1FBC0EA3A63",
 				BEE174B4C52DC439864EC2D6,
 				"62E9CF88273EAC1F3CE4EB9B",
 				F00E1DE0C5E84DD4B8406CBA,
@@ -2453,6 +2475,7 @@
 				BAF04EC182AA376E071B36D6,
 				"25572CA25778555AF926E68A",
 				"3BCDAB884785DA9D717F9261",
+				B710A3B614D2D189EF3CBB9D,
 				"416705E94409FC80A9DAA044",
 				"3299823280EBBE1C9EF11F58",
 				"6B21EC44F7E8EF082BA47285",
@@ -2461,6 +2484,7 @@
 				"2968238F8E50CAF64D7A5B9B",
 				"7BA1EF32E16E7FE4B0EEFEC7",
 				BAC40B2220A26E474C4E2EEF,
+				DA178582417882BB64846717,
 				"02831771C1B71EF0AF471A4D",
 				E1192CCD9653F6BE12A68188,
 				C1BAFE259D12F952C2E2C79F,
@@ -2634,7 +2658,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = "1.1";
+				MARKETING_VERSION = "1.2";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -2691,7 +2715,7 @@
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = UIInterfaceOrientationPortrait;
 				LD_RUNPATH_SEARCH_PATHS = "$(inherited) @executable_path/Frameworks";
-				MARKETING_VERSION = "1.1";
+				MARKETING_VERSION = "1.2";
 				PRODUCT_BUNDLE_IDENTIFIER = com.tenpoone.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";

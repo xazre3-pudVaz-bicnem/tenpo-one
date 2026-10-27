@@ -111,7 +111,7 @@ extension NativeFloorModel {
             guard NativeCatalogCache.shared.load() != nil else {
                 return .local(ok: false, error: "メニューがまだこの iPad に保存されていません（一度ネットにつないでください）")
             }
-            let guests = ((draft["male"] as? Int) ?? 0) + ((draft["female"] as? Int) ?? 0)
+            let guests = (draft["guestCount"] as? Int) ?? (((draft["male"] as? Int) ?? 0) + ((draft["female"] as? Int) ?? 0))
             let o = NativeOfflineStore.shared.startLocal(storeId: storeId, tableId: tableId, tableName: table.name, guestCount: max(1, guests), draft: draft)
             return .local(ok: true, orderId: o.id)
         case "floorBill":

@@ -6,7 +6,7 @@ import type { SessionContext } from '@/lib/auth';
 import { addCustomPriceItem, addItem, cancelItem, checkout, clearTable } from '@/app/app/pos/actions';
 import { setOrderClerk } from '@/app/app/pos/clerk-actions';
 import { setOrderVisitSource } from '@/lib/native-pos-server';
-import { visitMemo, visitSourceByLabel } from '@/lib/handy-visit';
+import { visitGuestCount, visitMemo, visitSourceByLabel } from '@/lib/handy-visit';
 import { offlineCashPayments, offlineRoundingAllowed, type OfflineSyncOrder } from '@/lib/native-offline-sync';
 
 type Admin = ReturnType<typeof createAdminClient>;
@@ -326,7 +326,7 @@ async function createOfflineOrder(ctx: SessionContext, input: OfflineSyncOrder):
     : ((settings as { default_stay_minutes?: number } | null)?.default_stay_minutes ?? 120);
   const startAt = new Date(input.openedAt ?? Date.now());
   const endAt = new Date(startAt.getTime() + stay * 60_000);
-  const guests = Math.max(1, draft.male + draft.female);
+  const guests = Math.max(1, visitGuestCount(draft));
 
   // 前の通信で作れていたら、それを使う（伝票・予約の id は iPad の伝票の id。二重に作らない）
   const { data: existing } = await supabase.from('orders').select('id').eq('id', input.clientId).maybeSingle();

@@ -3,7 +3,7 @@ import { createClient } from '@/lib/supabase/server';
 import type { SessionContext } from '@/lib/auth';
 import { setSeatTime } from '@/app/app/pos/actions';
 import { setOrderVisitSource } from '@/lib/native-pos-server';
-import { visitMemo, visitSourceByLabel } from '@/lib/handy-visit';
+import { visitGuestCount, visitMemo, visitSourceByLabel } from '@/lib/handy-visit';
 import { visitFromMemo, type NativeVisitEdit } from '@/lib/native-visit-edit';
 import { legacyEditDuration } from '@/lib/table-time-limit';
 
@@ -62,7 +62,7 @@ export async function saveVisitEdit(ctx: SessionContext, a: NativeVisitEdit): Pr
     startTime: d.startTime,
     durationMinutes: d.timed ? d.duration : null,
     courseId: a.courseId,
-    guestCount: d.male + d.female,
+    guestCount: visitGuestCount(d),
     plans: d.plans,
     planItemIds: d.planItemIds,
   });

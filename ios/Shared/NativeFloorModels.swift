@@ -20,6 +20,7 @@ struct NFLine: Codable, Identifiable, Hashable {
 
 struct NFSlip: Codable, Identifiable, Hashable {
     let id: String
+    var reservationId: String? = nil
     let orderNo: Int
     let openedAtMs: Double
     let guestCount: Int

@@ -7,7 +7,7 @@ import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { HANDY_CLERK_COOKIE, serializeHandyClerk } from '@/lib/handy-clerk';
 import { readHandyClerk } from '@/lib/handy-session';
-import { validateVisitDraft, visitMemo, type VisitDraft } from '@/lib/handy-visit';
+import { validateVisitDraft, visitGuestCount, visitMemo, type VisitDraft } from '@/lib/handy-visit';
 import { isSeatCourseItem } from '@/lib/menu-book';
 import { addCustomPriceItem, addItem, sendItemsToKitchen, setGuestCount, setSeatTime } from '../pos/actions';
 import { enqueueCancelSlipPrint } from '../pos/print-actions';
@@ -134,7 +134,7 @@ async function startVisit(
   const problem = validateVisitDraft(draft, { requireSource: !sourceOptional });
   if (problem) throw new Error(problem);
 
-  const guests = draft.male + draft.female;
+  const guests = visitGuestCount(draft);
   // 選んだプランのうちコースがあれば、席のコース（reservations.course_id）にも入れる。
   // これまでは伝票に商品を入れるだけだったので、注文画面の「お客様情報」のコースが「なし（アラカルト）」のままだった
   // （2026-10-06 FULL MOoN 御茶ノ水 宮崎さん「この画面でモードやプランを設定しても、次の画面で なし(アラカルト) になる」）。

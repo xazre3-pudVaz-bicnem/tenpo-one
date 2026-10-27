@@ -33,6 +33,8 @@ export interface FloorTable {
  */
 export interface TableSlip {
   id: string;
+  /** Identifies the seated party when opening a table from the reservation ledger. */
+  reservationId?: string | null;
   orderNo: number;
   openedAtMs: number;
   guestCount: number;

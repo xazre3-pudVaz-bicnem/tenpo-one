@@ -63,6 +63,8 @@ struct NativeSetupSheet: View {
     let table: NFTable
     /// 着席中の直し（nil＝空席の来店登録）
     var edit: NFVisitEdit? = nil
+    /// Also used inside the table popup, so floor and ledger share one editor.
+    var embedded = false
     let onClose: () -> Void
     let onStarted: (String) -> Void
 
@@ -73,8 +75,7 @@ struct NativeSetupSheet: View {
 
     @State private var plans: [String] = ["normal"]
     @State private var planItemIds: [String] = []
-    @State private var male = 0
-    @State private var female = 0
+    @State private var guests = 0
     @State private var source = ""
     // 時間制は最初から ON・2時間、終了前注意は ON・30分前（2026-10-24 Ronnie）
     @State private var timed = true
@@ -97,7 +98,6 @@ struct NativeSetupSheet: View {
 
     private var payload: NFPayload? { model.payload }
     private var planItems: [NFPlanItem] { (payload?.planItems ?? []).filter { plans.contains($0.kind) } }
-    private var guests: Int { male + female }
     private var planNames: String {
         let names = payload?.plans ?? []
         return plans.compactMap { id in names.first { $0.id == id }?.name }.joined(separator: "・")
@@ -131,7 +131,8 @@ struct NativeSetupSheet: View {
     ///   左：テーブル・モード・プラン／タイマー設定（時間制・終了前注意・開始時間）／人数　右：来店経路
     var body: some View {
         VStack(spacing: 0) {
-            NFCardHeader(title: "お客様情報", en: "Guest info") {
+            if !embedded {
+            NFCardHeader(title: table.name, en: "") {
                 Button(action: onClose) {
                     HStack(spacing: 4) {
                         Image(systemName: "chevron.left").font(.system(size: 16, weight: .bold))
@@ -144,6 +145,7 @@ struct NativeSetupSheet: View {
                 }
                 .buttonStyle(.plain)
             } right: { EmptyView() }
+            }
 
             // 入るならそのまま、入らない画面（縦向きなど）だけスクロール
             ViewThatFits(in: .vertical) {
@@ -204,28 +206,30 @@ struct NativeSetupSheet: View {
 
     private var leftColumn: some View {
         VStack(alignment: .leading, spacing: 8) {
-            heading("モード", en: "Mode")
             card {
+                if !embedded {
                 row("テーブル", en: "Table") { Text(table.name).font(.system(size: 17, weight: NT.strong)).foregroundColor(NFColor.ink) }
                 rowDivider
+                }
                 row("モード", en: "Mode") {
                     valueText(planNames, on: true)
                     setButton { popup = .mode }
                 }
-                if plans.contains(where: { $0 != "normal" }) {
+                if plans.contains(where: { $0 != "normal" }) || courseId != nil {
                     rowDivider
                     row("プラン", en: "Plan") {
-                        valueText(pickedPlanNames.isEmpty ? "未設定" : pickedPlanNames, on: !pickedPlanNames.isEmpty)
+                        valueText(pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames, on: !pickedPlanNames.isEmpty || courseId != nil)
                         setButton { popup = .plan }
                     }
                 }
+                if shownName != nil {
                 rowDivider
                 // 顧客名は予約（店舗台帳）から自動で出す。探すボタンは置かない（2026-10-24 Ronnie「予約にあれば自動で出る」）
                 row("顧客名", en: "Name") {
                     valueText(shownName.map { "\($0) 様" } ?? "未登録", on: shownName != nil)
                 }
+                }
             }
-            heading("タイマー設定", en: "Timer")
             card {
                 row("時間制", en: "Time limit") {
                     Toggle("", isOn: $timed).labelsHidden().tint(GIColor.blue)
@@ -244,17 +248,8 @@ struct NativeSetupSheet: View {
                     setButton { popup = .start }
                 }
             }
-            HStack {
-                heading("人数", en: "Guests", required: true)
-                Spacer()
-                Text("合計：\(guests)人").font(.system(size: 15, weight: .bold)).monospacedDigit().foregroundColor(NFColor.ink2)
-            }
             card {
-                VStack(spacing: 8) {
-                    countRow("男性", en: "Male", value: $male, target: .male)
-                    countRow("女性", en: "Female", value: $female, target: .female)
-                }
-                .padding(12)
+                countRow("人数", en: "Guests", value: $guests, target: .guests).padding(10)
             }
         }
     }
@@ -431,7 +426,7 @@ struct NativeSetupSheet: View {
         }
         .padding(20)
         .frame(width: 500)
-        .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+        .background(NT.page, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 28, y: 12)
     }
 
@@ -453,8 +448,9 @@ struct NativeSetupSheet: View {
         var draft: [String: Any] = [
             "plans": plans.sorted { (NF_PLAN_ORDER.firstIndex(of: $0) ?? 9) < (NF_PLAN_ORDER.firstIndex(of: $1) ?? 9) },
             "planItemIds": planItemIds,
-            "male": male,
-            "female": female,
+            "male": 0,
+            "female": 0,
+            "guestCount": guests,
             "source": source,
             "timed": timed,
             "duration": duration,
@@ -499,8 +495,7 @@ struct NativeSetupSheet: View {
         let dur = Int(((o.endAtMs - o.openedAtMs) / 60_000).rounded())
         timed = dur > 0
         if dur > 0 { duration = max(15, dur - NF_LAST_ORDER_WARN_MINUTES) }
-        male = e.slip.guestCount
-        female = 0
+        guests = e.slip.guestCount
         let labels = (payload?.visitSources ?? []).map(\.label)
         if labels.contains(o.sourceLabel) { source = o.sourceLabel }
         // 伝票メモ（来店登録で入れたもの）から男女・時間制・終了前注意
@@ -508,7 +503,6 @@ struct NativeSetupSheet: View {
         comps.queryItems = [URLQueryItem(name: "part", value: "visitEdit"), URLQueryItem(name: "orderId", value: e.slip.id)]
         if let data = try? await NativeAPI.shared.send(URLRequest(url: comps.url!)),
            let r = try? JSONDecoder().decode(NFVisitEditPayload.self, from: data), let v = r.visit {
-            if let m = v.male, let f = v.female, m + f == e.slip.guestCount { male = m; female = f }
             if let s = v.source, source.isEmpty, labels.contains(s) { source = s }
             timed = v.timed
             // 来店登録で入れた時間制（＝L.O. までの時間）があれば、それをそのまま
@@ -549,19 +543,20 @@ struct NativeSetupSheet: View {
             right()
         }
         .padding(.horizontal, 14)
-        .frame(height: 50)
+        .frame(minHeight: embedded ? 40 : 46)
     }
 
     private func valueText(_ t: String, on: Bool) -> some View {
-        Text(t).font(.system(size: 16, weight: on ? .bold : .regular)).monospacedDigit()
-            .foregroundColor(on ? GIColor.blue : NFColor.ink3).lineLimit(1)
+        Text(t).font(.system(size: 15, weight: .medium)).monospacedDigit()
+            .foregroundColor(on ? NFColor.ink2 : NFColor.ink3).lineLimit(3).fixedSize(horizontal: false, vertical: true)
     }
 
     private func setButton(enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
-            Text("設定").font(.system(size: 15, weight: .bold)).foregroundColor(.white)
-                .frame(width: 76, height: 38)
-                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(GIColor.navy))
+            Text("変更").font(.system(size: 14, weight: .medium)).foregroundColor(GIColor.navy)
+                .frame(width: 64, height: 32)
+                .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(Color.white))
+                .overlay(RoundedRectangle(cornerRadius: 10).stroke(GIColor.line, lineWidth: 1))
         }
         .buttonStyle(PressableStyle())
         .disabled(!enabled)
@@ -602,8 +597,7 @@ struct NativeSetupSheet: View {
         guard case .pad(let t) = pp else { return }
         let v = Int(padText) ?? 0
         switch t {
-        case .male: male = min(999, v)
-        case .female: female = min(999, v)
+        case .guests, .male, .female: guests = min(999, v)
         case .duration: duration = min(600, max(15, v))
         case .warning: warningMinutes = min(180, max(5, v))
         }
@@ -611,8 +605,7 @@ struct NativeSetupSheet: View {
 
     private func padInitial(_ t: NFPadTarget) -> Int {
         switch t {
-        case .male: return male
-        case .female: return female
+        case .guests, .male, .female: return guests
         case .duration: return duration
         case .warning: return warningMinutes
         }
@@ -651,7 +644,7 @@ struct NativeSetupSheet: View {
             ForEach(1...5, id: \.self) { n in
                 let on = value.wrappedValue == n
                 Button { value.wrappedValue = on ? 0 : n } label: {
-                    Text("\(n)").font(.system(size: 22, weight: .bold))
+                    Text("\(n)").font(.system(size: 20, weight: .medium))
                         .foregroundColor(on ? .white : GIColor.navy)
                         .frame(maxWidth: .infinity).frame(height: 48)
                         .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(on ? GIColor.navy : Color.white))
@@ -937,11 +930,11 @@ struct NFChipGrid: View {
                         .multilineTextAlignment(.center)
                         .fixedSize(horizontal: false, vertical: lines > 1)
                         .padding(.vertical, lines > 1 ? 6 : 0)
-                        .foregroundColor(on ? (it.3 ? NFColor.ink : .white) : it.2)
+                        .foregroundColor(on ? .white : GIColor.navy)
                         .frame(maxWidth: .infinity, minHeight: height)
                         .padding(.horizontal, 6)
-                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? it.2 : it.2.opacity(0.1)))
-                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(it.2.opacity(on ? 0 : 0.35), lineWidth: 1))
+                        .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(on ? GIColor.navy : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(on ? GIColor.navy : GIColor.line, lineWidth: 1))
                 }
                 .buttonStyle(PressableStyle())
             }
@@ -1030,18 +1023,20 @@ let nfJstCalendar: Calendar = {
 
 /// テンキーで入れるもの
 enum NFPadTarget: Equatable {
-    case male, female, duration, warning
+    case guests, male, female, duration, warning
     var title: String {
         switch self {
+        case .guests: return "人数"
         case .male: return "男性の人数"
         case .female: return "女性の人数"
         case .duration: return "時間制（分）"
         case .warning: return "終了前注意（何分前）"
         }
     }
-    var unit: String { self == .male || self == .female ? "名" : "分" }
+    var unit: String { self == .guests || self == .male || self == .female ? "名" : "分" }
     var en: String {
         switch self {
+        case .guests: return "Guests"
         case .male: return "Male"
         case .female: return "Female"
         case .duration: return "Minutes"
