@@ -191,7 +191,7 @@ struct NativeSetupSheet: View {
     /// 来店経路の列は出さない（会計で選ぶ）
     private var columns: some View {
         VStack(spacing: 16) {
-            planCard.zIndex(2)
+            planCard.frame(maxWidth: 796).zIndex(2)
             ViewThatFits(in: .horizontal) {
                 HStack(alignment: .top, spacing: 16) {
                     leftColumn.frame(width: 360).frame(maxHeight: .infinity, alignment: .top).zIndex(1)
