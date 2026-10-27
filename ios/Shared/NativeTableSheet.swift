@@ -218,6 +218,7 @@ struct NativeTableSheet: View {
         NativeSetupSheet(model: model, table: table, embedded: true, onClose: onClose, onStarted: { id in
             onClose(); onOpenOrder(id, false)
         })
+        .zIndex(1)
         divider
         HStack(spacing: 8) {
             secondaryButton(icon: "lock", "テーブルブロック", en: "Block", enabled: canOperate) {
@@ -298,6 +299,7 @@ struct NativeTableSheet: View {
             NativeSetupSheet(model: model, table: table, edit: NFVisitEdit(order: o, slip: slip), embedded: true,
                              onClose: { guestEditorOpen = false }, onStarted: { _ in guestEditorOpen = false })
                 .id(slip.id)
+                .zIndex(1)
             }
         }
         if panel == .merge { mergePanel }

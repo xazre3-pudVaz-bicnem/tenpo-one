@@ -184,6 +184,8 @@ struct NativeSetupSheet: View {
             .padding(.horizontal, 18).padding(.top, 6).padding(.bottom, 14)
             .background(NFColor.lilacSoft)
         }
+        // 卓のポップアップの中では、テンキーなどの小窓が入る高さまで広げる（下のボタンと重ならない。2026-10-27 19:32 Ronnie の写真）
+        .frame(minHeight: embedded && popup != nil ? 600 : nil, alignment: .top)
         .overlay {
             if let pp = popup {
                 ZStack {
