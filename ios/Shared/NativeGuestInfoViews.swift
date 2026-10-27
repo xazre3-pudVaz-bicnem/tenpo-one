@@ -200,12 +200,14 @@ struct NativeSetupSheet: View {
                 }
                 row("モード", en: "Mode") {
                     valueText(planNames, on: true)
+                    toggleSlot(nil, enabled: false)
                     setButton { popup = .mode }
                 }
                 if plans.contains(where: { $0 != "normal" }) || courseId != nil {
                     rowDivider
                     row("プラン", en: "Plan") {
                         valueText(pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames, on: !pickedPlanNames.isEmpty || courseId != nil)
+                        toggleSlot(nil, enabled: false)
                         setButton { popup = .plan }
                     }
                 }
@@ -214,25 +216,38 @@ struct NativeSetupSheet: View {
                 // 顧客名は予約（店舗台帳）から自動で出す。探すボタンは置かない（2026-10-24 Ronnie「予約にあれば自動で出る」）
                 row("顧客名", en: "Name") {
                     valueText(shownName.map { "\($0) 様" } ?? "未登録", on: shownName != nil)
+                    toggleSlot(nil, enabled: false)
+                    Color.clear.frame(width: 64, height: 32)
                 }
                 }
             }
             card {
+                // どの行も同じ列にそろえる：値（右寄せ）→ スイッチ → 設定（2026-10-27 19:44 Ronnie「時間 lai agadi yeslai paxadi、design いっち」）
                 row("時間制", en: "Time limit") {
-                    Toggle("", isOn: $timed).labelsHidden().tint(GIColor.blue)
                     valueText(timed ? nfDurationLabel(duration) : "設定なし", on: timed)
+                    toggleSlot($timed, enabled: true)
                     setButton(enabled: timed) { popup = .duration }
                 }
                 rowDivider
                 row("終了前注意", en: "Last call") {
-                    Toggle("", isOn: $warningEnabled).labelsHidden().tint(GIColor.blue).disabled(!timed)
                     valueText(timed && warningEnabled ? "\(warningMinutes)分前" : "設定なし", on: timed && warningEnabled)
+                    toggleSlot($warningEnabled, enabled: timed)
                     setButton(enabled: timed && warningEnabled) { popup = .warning }
                 }
                 rowDivider
                 row("開始時間", en: "Start time") {
-                    valueText("\(nfHm(startNow && (edit == nil || startChanged) ? model.nowDate : startDate))〜", on: true)
+                    valueText(timed ? "\(nfHm(effectiveStart))〜\(nfHm(effectiveStart.addingTimeInterval(Double(duration) * 60)))" : "\(nfHm(effectiveStart))〜", on: true)
+                    toggleSlot(nil, enabled: false)
                     setButton { popup = .start }
+                }
+                // ラストオーダーの時刻（終わりから「終了前注意」の分だけ前。時間制のときだけ。2026-10-27 19:45 Ronnie「last order time pani need」）
+                if timed {
+                    rowDivider
+                    row("ラストオーダー", en: "Last order") {
+                        valueText(nfHm(effectiveStart.addingTimeInterval(Double(duration - (warningEnabled ? warningMinutes : 0)) * 60)), on: true)
+                        toggleSlot(nil, enabled: false)
+                        Color.clear.frame(width: 64, height: 32)
+                    }
                 }
             }
             card {
@@ -528,12 +543,25 @@ struct NativeSetupSheet: View {
                 Text(ja).font(.system(size: 16)).foregroundColor(NFColor.ink2)
                 Text(en).font(.system(size: 10)).foregroundColor(NFColor.ink3)
             }
-            .frame(width: 150, alignment: .leading)
+            .frame(width: 112, alignment: .leading)
             Spacer(minLength: 4)
             right()
         }
         .padding(.horizontal, 14)
         .frame(minHeight: embedded ? 40 : 46)
+    }
+
+    /// 開始時間（今から／決めた時刻）
+    private var effectiveStart: Date { startNow && (edit == nil || startChanged) ? model.nowDate : startDate }
+
+    /// スイッチの列（無い行も同じ幅を空けて、値と「設定」の列をそろえる）
+    @ViewBuilder private func toggleSlot(_ on: Binding<Bool>?, enabled: Bool) -> some View {
+        if let on {
+            Toggle("", isOn: on).labelsHidden().tint(GIColor.blue).disabled(!enabled)
+                .scaleEffect(0.8).frame(width: 52, height: 32)
+        } else {
+            Color.clear.frame(width: 52, height: 32)
+        }
     }
 
     private func valueText(_ t: String, on: Bool) -> some View {

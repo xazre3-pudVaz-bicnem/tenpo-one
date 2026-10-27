@@ -28,7 +28,7 @@ struct NativeTableSheet: View {
 
     // 少し広く・ボタンを大きく（2026-10-24 Ronnie「横と縦をちょっと広く、ボタンを見やすく押しやすく」）
     /// 細く（2026-10-27 19:06 Ronnie「alli slim banau」）
-    private static let width: CGFloat = 460
+    private static let width: CGFloat = 420
 
     private var now: Double { model.now }
     private var slips: [NFSlip] { table.order?.slips ?? [] }
@@ -239,7 +239,8 @@ struct NativeTableSheet: View {
         // 注文｜レジ会計（同じ大きさ）、その下に会計伝票を横長く（2026-10-27 19:39 Ronnie「注文 レジ会計 same button、会計伝票 横ながい、したのはそのまま」）
         HStack(alignment: .top, spacing: 8) {
             // 注文も白い箱（濃い色だと選んだように見える（2026-10-27 10:25 Ronnie「yo color le garda pahilai select vaye jasto dekhiyo so sabai normal banau」））
-            bigButton("注文", en: "Order", fill: .white, textColor: Self.ink, border: Self.line, height: 72, size: 20) {
+            // 注文・会計は縦長く、上に線の印（2026-10-27 19:42・19:47 Ronnie「注文 会計 button alli thulo、立ながい、かっこい」）
+            bigButton("注文", en: "Order", icon: "fork.knife", fill: .white, textColor: Self.ink, border: Self.line, height: 116, size: 22) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
@@ -251,7 +252,7 @@ struct NativeTableSheet: View {
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
             // 注文＝紫紺、レジ会計・会計伝票＝白い箱（黒・緑にしない。2026-10-27 02:48 Ronnie「会計伝票 black ma pani pardaina」）
             // 「レジ会計」→「会計」（2026-10-27 19:39 Ronnie「レジ会計 lai 会計 matra banau」）
-            bigButton("会計", en: "Checkout", fill: .white, textColor: Self.ink, border: Self.line, height: 72, size: 20, enabled: selected != nil) {
+            bigButton("会計", en: "Checkout", icon: "yensign.circle", fill: .white, textColor: Self.ink, border: Self.line, height: 116, size: 22, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
         }
@@ -517,9 +518,13 @@ struct NativeTableSheet: View {
     static let ink = Color(hex: 0x2B2740)
     static let line = Color(hex: 0xE3E5EA)
 
-    private func bigButton(_ ja: String, en: String?, fill: Color, textColor: Color = .white, border: Color? = nil, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
+    private func bigButton(_ ja: String, en: String?, icon: String? = nil, fill: Color, textColor: Color = .white, border: Color? = nil, height: CGFloat = 60, size: CGFloat = 18, enabled: Bool = true, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             VStack(spacing: 0) {
+                if let icon {
+                    Image(systemName: icon).font(.system(size: 26, weight: .regular)).foregroundColor(Self.primary)
+                        .frame(height: 34).padding(.bottom, 4)
+                }
                 Text(ja).font(.system(size: size, weight: NT.strong))
                 if let en { Text(en).font(.system(size: 12, weight: .semibold)).opacity(0.8) }
             }
