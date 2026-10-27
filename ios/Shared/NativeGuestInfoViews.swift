@@ -93,6 +93,7 @@ struct NativeSetupSheet: View {
     /// 小さなポップアップ（モード・プラン・時間制・終了前注意・開始時間）
     @State private var popup: NFSetupPopup?
     /// 人数のテンキー：もう 1 けためを打ったか（最初の数字は前の人数を置きかえる）
+    @State private var timeDropdown: String?
     @State private var guestTyped = false
     /// テンキーの数（ポップアップの中で入れる）
     @State private var padText = ""
@@ -189,54 +190,79 @@ struct NativeSetupSheet: View {
 
     /// 来店経路の列は出さない（会計で選ぶ）
     private var columns: some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .top, spacing: 16) {
-                leftColumn.frame(width: 360).frame(maxHeight: .infinity, alignment: .top)
-                card { guestPad.padding(10) }
-                    .frame(width: 420).frame(maxHeight: .infinity)
-            }
-            .fixedSize(horizontal: false, vertical: true)
-            VStack(spacing: 12) {
-                leftColumn
-                card { guestPad.padding(10) }
+        VStack(spacing: 16) {
+            planCard
+            ViewThatFits(in: .horizontal) {
+                HStack(alignment: .top, spacing: 16) {
+                    leftColumn.frame(width: 360).frame(maxHeight: .infinity, alignment: .top).zIndex(1)
+                    card { guestPad.padding(10) }.frame(width: 420).frame(maxHeight: .infinity)
+                }
+                .fixedSize(horizontal: false, vertical: true)
+                VStack(spacing: 12) {
+                    leftColumn.zIndex(1)
+                    card { guestPad.padding(10) }
+                }
             }
         }
         .padding(.horizontal, 18).padding(.top, 12).padding(.bottom, 12)
+    }
+
+    private var planCard: some View {
+        card {
+            if !embedded {
+                row("テーブル", en: "Table") { valueText(table.name, on: true) }
+                rowDivider
+            }
+            row("モード", en: "Mode") {
+                selectionField(planNames) { timeDropdown = nil; popup = .mode }
+            }
+            rowDivider
+            row("プラン", en: "Plan") {
+                selectionField(pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames) { timeDropdown = nil; popup = .plan }
+            }
+        }
     }
 
     // MARK: 左の列
 
     private var leftColumn: some View {
         VStack(alignment: .leading, spacing: 12) {
-            card {
-                if !embedded {
-                    row("テーブル", en: "Table") { valueText(table.name, on: true) }
-                    rowDivider
-                }
-                row("モード", en: "Mode") {
-                    selectionField(planNames) { popup = .mode }
-                }
-                rowDivider
-                row("プラン", en: "Plan") {
-                    selectionField(pickedPlanNames.isEmpty ? (edit?.order.course?.label ?? "未設定") : pickedPlanNames) { popup = .plan }
-                }
-            }
             VStack(alignment: .leading, spacing: 6) {
                 Text("タイマー設定").font(.system(size: 11)).foregroundColor(NFColor.ink3).padding(.leading, 2)
                 card {
                     row("時間制", en: "Time limit") {
                         checkbox($timed, label: "時間制", enabled: true)
-                        selectionField(nfDurationLabel(duration), enabled: timed) { popup = .duration }
-                    }
+                        HStack(spacing: 4) {
+                            timeChoice("duration-hour", value: duration / 60, options: Array(0...23), enabled: timed) { duration = max(15, $0 * 60 + duration % 60) }
+                            timeUnit("時間")
+                            timeChoice("duration-minute", value: duration % 60, options: [0, 15, 30, 45], enabled: timed) { duration = max(15, (duration / 60) * 60 + $0) }
+                            timeUnit("分")
+                        }
+                    }.zIndex(4)
                     rowDivider
                     row("終了前注意", en: "Last call") {
                         checkbox($warningEnabled, label: "終了前注意", enabled: timed)
-                        selectionField("\(warningMinutes)分前", enabled: timed && warningEnabled) { popup = .warning }
-                    }
+                        timeChoice("warning", value: warningMinutes, options: [15, 30, 45], enabled: timed && warningEnabled, suffix: "分前") { warningMinutes = $0 }
+                    }.zIndex(3)
                     rowDivider
-                    row("開始時間", en: "Start time") {
-                        selectionField(nfHm(effectiveStart), icon: "clock") { popup = .start }
-                    }
+                    row("開始時刻", en: "Start time") {
+                        HStack(spacing: 4) {
+                            Button { startNow = true; startChanged = true; timeDropdown = nil } label: {
+                                Text("今").font(.system(size: 11)).foregroundColor(GIColor.navy)
+                                    .padding(5).background(startNow ? GIColor.navySoft : Color.white, in: RoundedRectangle(cornerRadius: 6))
+                            }.buttonStyle(.plain).accessibilityLabel("今の時刻")
+                            timeChoice("start-hour", value: nfJstCalendar.component(.hour, from: effectiveStart), options: Array(0...23)) { h in
+                                let m = nfJstCalendar.component(.minute, from: effectiveStart)
+                                startNow = false; setStart(hour: h, minute: m)
+                            }
+                            timeUnit("時")
+                            timeChoice("start-minute", value: nfJstCalendar.component(.minute, from: effectiveStart), options: [0, 15, 30, 45]) { m in
+                                let h = nfJstCalendar.component(.hour, from: effectiveStart)
+                                startNow = false; setStart(hour: h, minute: m)
+                            }
+                            timeUnit("分")
+                        }
+                    }.zIndex(2)
                     if timed {
                         rowDivider
                         row("L.O.", en: "Last order") {
@@ -258,6 +284,51 @@ struct NativeSetupSheet: View {
                 }
             }
         }
+    }
+
+    private func timeUnit(_ text: String) -> some View {
+        Text(text).font(.system(size: 10)).foregroundColor(NFColor.ink3).fixedSize()
+    }
+
+    private func timeChoice(_ id: String, value: Int, options: [Int], enabled: Bool = true, suffix: String = "", select: @escaping (Int) -> Void) -> some View {
+        Button { timeDropdown = timeDropdown == id ? nil : id } label: {
+            HStack(spacing: 3) {
+                Text(String(format: "%02d", value) + suffix).monospacedDigit().lineLimit(1).minimumScaleFactor(0.8)
+                Spacer(minLength: 0)
+                Image(systemName: "chevron.down").font(.system(size: 8))
+            }
+            .font(.system(size: 13)).foregroundColor(NFColor.ink2)
+            .padding(.horizontal, 7).frame(maxWidth: .infinity).frame(height: 36)
+            .background(Color(hex: 0xF7F7FA), in: RoundedRectangle(cornerRadius: 9))
+        }
+        .buttonStyle(.plain).disabled(!enabled).opacity(enabled ? 1 : 0.4)
+        .accessibilityLabel(id).accessibilityValue(String(value))
+        .overlay(alignment: .topLeading) {
+            if timeDropdown == id && enabled {
+                ScrollViewReader { proxy in
+                    ScrollView(showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            ForEach(options, id: \.self) { option in
+                                Button { select(option); timeDropdown = nil } label: {
+                                    Text(String(format: "%02d", option) + suffix)
+                                        .font(.system(size: 14)).monospacedDigit().foregroundColor(GIColor.navy)
+                                        .frame(maxWidth: .infinity, alignment: .leading).padding(.horizontal, 8).frame(height: 36)
+                                        .background(value == option ? Color(hex: 0xE7E0EF) : Color.white)
+                                }.buttonStyle(.plain).id(option)
+                            }
+                        }
+                    }
+                    .frame(height: CGFloat(min(4, options.count)) * 36)
+                    .background(Color.white, in: RoundedRectangle(cornerRadius: 8))
+                    .clipShape(RoundedRectangle(cornerRadius: 8))
+                    .overlay(RoundedRectangle(cornerRadius: 8).stroke(GIColor.line, lineWidth: 1))
+                    .shadow(color: .black.opacity(0.12), radius: 8, y: 4)
+                    .onAppear { proxy.scrollTo(value < 4 ? options.first : value, anchor: .top) }
+                }
+                .offset(y: 39)
+            }
+        }
+        .zIndex(timeDropdown == id ? 1 : 0)
     }
 
     private func selectionField(_ title: String, enabled: Bool = true, icon: String = "chevron.down", action: @escaping () -> Void) -> some View {
@@ -529,7 +600,15 @@ struct NativeSetupSheet: View {
 
     /// 直しのとき：今の伝票の値を入れる（モード・人数・来店経路・時間制・終了前注意・開始時間・コース）
     private func prefill() async {
-        guard let e = edit, !prefilled else { return }
+        guard !prefilled else { return }
+        guard let e = edit else {
+            if let reservation = table.nextReservation(now: model.now) {
+                startDate = Date(timeIntervalSince1970: reservation.startMs / 1000)
+                startNow = false
+            }
+            prefilled = true
+            return
+        }
         let o = e.order
         plans = o.plansOrDefault
         courseId = o.courseId
