@@ -379,15 +379,8 @@ struct NativeTableCard: View {
                         }
                         .layoutPriority(1)
                     }
-                    // 卓の名前は店が付けたまま（T-1・C-2…）。横に小さく席の種類（テーブル・カウンター・個室）
-                    // （2026-10-27 03:00 Ronnie「clint le table name j lekhxa tyo aaune、side ma sano ma テーブル カウンター 個室」）。
-                    // 残りの幅に入るときだけ
-                    ViewThatFits(in: .horizontal) {
-                        Text(Self.seatKind(table))
-                            .font(.system(size: 11, weight: .semibold)).foregroundColor(NFColor.ink3)
-                            .lineLimit(1).fixedSize()
-                        Color.clear.frame(width: 0, height: 0)
-                    }
+                    // 席の種類（テーブル・カウンター）は卓の箱に書かない。空けておく
+                    // （2026-10-27 10:07 Ronnie「テーブル lekheko pardaina、tyo bhag ma space matrai rakhe pugxa」）
                     Spacer(minLength: 4)
                     // 人の印と人数は卓の番号と同じ大きさ。「名」は書かず数字だけ。
                     // お客様が来店（着席）してから印も数字も出す（2026-10-24 22:19「お客様が来てから書く」・2026-10-25 00:10 Ronnie「人の印も来店してから」）

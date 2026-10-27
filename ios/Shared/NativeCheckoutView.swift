@@ -437,14 +437,15 @@ struct NativeCheckoutView: View {
                         // 支払方法ごとの色（現金＝緑、クレジット＝青…）。選ぶとその色で塗る
                         VStack(spacing: 4) {
                             // 色は付けない（白い地に紫紺の印・選ぶと紫紺。2026-10-27 03:21 Ronnie「colorfull pardaina」）
-                            Image(systemName: m.icon).font(.system(size: 20, weight: .regular)).foregroundColor(on ? .white : OV.primary)
+                            Image(systemName: m.icon).font(.system(size: 20, weight: .regular)).foregroundColor(OV.primary)
                             Text(m.label).font(.system(size: 13, weight: .bold)).lineLimit(1).minimumScaleFactor(0.7)
                             Text(m.english).font(.system(size: 9, weight: .semibold)).opacity(0.7).lineLimit(1)
                         }
-                        .foregroundColor(on ? .white : NT.ink)
+                        .foregroundColor(NT.ink)
                         .frame(maxWidth: .infinity, minHeight: 74)
-                        .background(RoundedRectangle(cornerRadius: 12).fill(on ? OV.primary : Color.white))
-                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(on ? OV.primary : OV.line, lineWidth: 1))
+                        // 選んだ支払方法も塗らない（白い地に紫紺の太い線と字）（2026-10-27 10:25 Ronnie「yo color le garda pahilai select vaye jasto dekhiyo so sabai normal banau」）
+                        .background(RoundedRectangle(cornerRadius: 12).fill(on ? OV.soft : Color.white))
+                        .overlay(RoundedRectangle(cornerRadius: 12).stroke(on ? OV.primary : OV.line, lineWidth: on ? 2 : 1))
                     }
                     .buttonStyle(PressableStyle())
                 }

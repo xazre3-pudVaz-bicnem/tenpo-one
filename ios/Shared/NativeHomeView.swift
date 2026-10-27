@@ -421,10 +421,11 @@ struct NativeHomeView: View {
         var byKey: [String: GridTile] = [:]
         // 在庫設定は「メニュー在庫管理」として 注文・会計 の上のバーへ（2026-10-27 01:45 Ronnie）
         for t in tools where !Self.sideTools.contains(t.href) && t.href != Self.settingsHref && t.href != "/app/inventory" {
-            let (sym, color) = Self.toolIcon(t.href)
+            // 道具・数字の印の色は付けない（2026-10-27 10:12 Ronnie「clip haru ko color ni same vanau color なし」）
+            let (sym, _) = Self.toolIcon(t.href)
             // 仕入・経費 は前の上のベルのお知らせの数も（多いほう）
             let badge = t.href == "/app/expenses" ? max(t.badge ?? 0, model.payload?.noticeCount ?? 0) : t.badge
-            byKey[t.href] = GridTile(key: t.href, icon: sym, color: color, label: t.label, en: t.en, badge: badge, action: { toolTap(t) })
+            byKey[t.href] = GridTile(key: t.href, icon: sym, color: Self.tileText, label: t.label, en: t.en, badge: badge, action: { toolTap(t) })
         }
         // ハンディQR は今までの上のバーと同じ qrcode（紺）
         byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "qrcode", color: NFColor.navy, label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
@@ -594,7 +595,7 @@ struct NativeHomeView: View {
                     HStack(spacing: 8) {
                         // 天気のアイコン（晴れ・くもり・雨・雪・雷、晴れの夜は月）。今まで通り青
                         if model.payload?.weather.temperature != nil, let sym = model.payload?.weather.symbol {
-                            Image(systemName: sym).font(.system(size: 26, weight: .regular)).foregroundColor(Self.blue)
+                            Image(systemName: sym).font(.system(size: 26, weight: .regular)).foregroundColor(Self.ink)
                         }
                         if let t = model.payload?.weather.temperature {
                             Text("\(Int(t.rounded()))°").font(.system(size: 36, weight: .regular)).foregroundColor(Self.inkSub)
@@ -631,14 +632,14 @@ struct NativeHomeView: View {
                 HStack(spacing: 10) {
                     Image(systemName: icon).font(.system(size: 15, weight: .bold)).foregroundColor(.white)
                         .frame(width: 32, height: 32)
-                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(color))
+                        .background(RoundedRectangle(cornerRadius: 8, style: .continuous).fill(Self.sideBg))
                     VStack(alignment: .leading, spacing: 0) {
                         Text(ja).font(.system(size: 15, weight: .medium)).foregroundColor(Self.inkSub).lineLimit(1)
                         Text(en).font(.system(size: 11)).foregroundColor(Self.inkSub).lineLimit(1)
                     }
                 }
                 HStack(alignment: .lastTextBaseline, spacing: 3) {
-                    Text(value.map { "\($0)" } ?? "—").font(.system(size: 36, weight: .semibold)).monospacedDigit().foregroundColor(Self.ink)
+                    Text(value.map { "\($0)" } ?? "—").font(.system(size: 34, weight: .medium)).monospacedDigit().foregroundColor(Self.ink)
                     Text(unit).font(.system(size: 14)).foregroundColor(Self.inkSub)
                     Spacer(minLength: 0)
                     if let d = diff {

@@ -135,7 +135,7 @@ struct NativeTableSheet: View {
                 if seated { seatedBody }
                 if groupOpen { groupPanel }
                 if state == .cleaning && slips.isEmpty {
-                    bigButton("清掃完了", en: "Cleaned", fill: Self.primary) { Task { await model.act(["type": "floorCleaned", "tableId": table.id]); onClose() } }
+                    bigButton("清掃完了", en: "Cleaned", fill: .white, textColor: Self.ink, border: Self.line) { Task { await model.act(["type": "floorCleaned", "tableId": table.id]); onClose() } }
                 }
                 if canOperate && slips.isEmpty && state == .unavailable {
                     secondaryButton(icon: "lock.open", "ブロック解除", en: "Unblock") {
@@ -202,7 +202,8 @@ struct NativeTableSheet: View {
     @ViewBuilder private var seatedBody: some View {
         // 人数・顧客・来店・金額のまとめは出さない（卓の箱に出ている。2026-10-24 Ronnie「ポップアップに金額などの詳細は要らない」）
         HStack(spacing: 8) {
-            bigButton("注文", en: "Order", fill: Self.primary, height: 64, size: 20) {
+            // 注文も白い箱（濃い色だと選んだように見える（2026-10-27 10:25 Ronnie「yo color le garda pahilai select vaye jasto dekhiyo so sabai normal banau」））
+            bigButton("注文", en: "Order", fill: .white, textColor: Self.ink, border: Self.line, height: 64, size: 20) {
                 Task {
                     if let s = selected {
                         onClose(); onOpenOrder(s.id, false)
