@@ -246,11 +246,12 @@ struct NativeSetupSheet: View {
                     }.zIndex(3)
                     rowDivider
                     row("開始時刻", en: "Start time") {
+                        Button { startNow = true; startChanged = true; timeDropdown = nil } label: {
+                            Text("今").font(.system(size: 11)).foregroundColor(GIColor.navy)
+                                .padding(5).background(startNow ? GIColor.navySoft : Color.white, in: RoundedRectangle(cornerRadius: 6))
+                                .frame(width: 32, height: 44)
+                        }.buttonStyle(.plain).accessibilityLabel("今の時刻")
                         HStack(spacing: 4) {
-                            Button { startNow = true; startChanged = true; timeDropdown = nil } label: {
-                                Text("今").font(.system(size: 11)).foregroundColor(GIColor.navy)
-                                    .padding(5).background(startNow ? GIColor.navySoft : Color.white, in: RoundedRectangle(cornerRadius: 6))
-                            }.buttonStyle(.plain).accessibilityLabel("今の時刻")
                             timeChoice("start-hour", value: nfJstCalendar.component(.hour, from: effectiveStart), options: Array(0...23)) { h in
                                 let m = nfJstCalendar.component(.minute, from: effectiveStart)
                                 startNow = false; setStart(hour: h, minute: m)
@@ -335,7 +336,7 @@ struct NativeSetupSheet: View {
     }
 
     private func timeUnit(_ text: String) -> some View {
-        Text(text).font(.system(size: 10)).foregroundColor(NFColor.ink3).fixedSize()
+        Text(text).font(.system(size: 10)).foregroundColor(NFColor.ink3).frame(width: 20)
     }
 
     private func timeChoice(_ id: String, value: Int, options: [Int], enabled: Bool = true, suffix: String = "", select: @escaping (Int) -> Void) -> some View {
