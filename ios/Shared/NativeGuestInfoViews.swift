@@ -195,7 +195,7 @@ struct NativeSetupSheet: View {
     // MARK: 空席の来店登録（画面の真ん中の大きなポップアップ。2026-10-28 Ronnie の iPad の写真と同じ並び）
     //   上：モード・プラン　左：タイマー設定（時間制・終了前注意・開始時刻・L.O.）　右：人数のテンキー＋テーブル作成・注文開始
 
-    private var wide: Bool { embedded && edit == nil }
+    private var wide: Bool { embedded }
 
     private var wideLayout: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -302,6 +302,7 @@ struct NativeSetupSheet: View {
                 }
             }
             VStack(spacing: 8) {
+                if edit == nil {
                 Button { Task { await confirm(openOrder: false) } } label: {
                     VStack(spacing: 0) {
                         Text("テーブル作成").font(.system(size: 18, weight: .medium))
@@ -314,10 +315,11 @@ struct NativeSetupSheet: View {
                 }
                 .buttonStyle(PressableStyle(scale: 0.98))
                 .disabled(!canConfirm).opacity(canConfirm ? 1 : 0.5)
+                }
                 Button { Task { await confirm() } } label: {
                     VStack(spacing: 2) {
-                        Text(saving ? "作成中…" : "注文開始").font(.system(size: 22, weight: NT.strong))
-                        Text("Start order").font(.system(size: 12)).opacity(0.8)
+                        Text(saving ? (edit == nil ? "作成中…" : "保存中…") : (edit == nil ? "注文開始" : "保存する")).font(.system(size: 22, weight: NT.strong))
+                        Text(edit == nil ? "Start order" : "Save").font(.system(size: 12)).opacity(0.8)
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)

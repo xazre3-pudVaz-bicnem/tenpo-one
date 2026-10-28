@@ -48,6 +48,9 @@ struct NativeTableSheet: View {
 
     /// 空席の来店登録は大きなポップアップ（2026-10-28 Ronnie の iPad の写真）
     private var wideEmpty: Bool { !seated && state != .cleaning && state != .unavailable }
+    /// 「変更」を押したら、来店登録と同じ大きなポップアップで直す（2026-10-28 18:48 Ronnie「変更 click garda auto yo pupup aaune banau」）
+    private var wideEdit: Bool { guestEditorOpen && seated && table.order != nil && selected != nil }
+    private var wideSheet: Bool { wideEmpty || wideEdit }
 
     var body: some View {
         ZStack(alignment: .topLeading) {
@@ -58,7 +61,7 @@ struct NativeTableSheet: View {
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
             // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
             // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
-            NFPopoverLayout(width: wideEmpty ? 860 : Self.width, maxHeight: wideEmpty ? 900 : 760, anchor: nil, fixedTop: nil) {
+            NFPopoverLayout(width: wideSheet ? 860 : Self.width, maxHeight: wideSheet ? 900 : 760, anchor: nil, fixedTop: nil) {
                 popup
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(180))
@@ -104,7 +107,7 @@ struct NativeTableSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 // 1 行に：卓番・人数の札・（あいだに）時間とプラン・変更の鉛筆・閉じる
                 // （2026-10-27 18:59 Ronnie「T番 tesko right tira 人 manxe ko clip ani tesko side ma 変更 pen、ini haru ko bich ma details」）
-                if !wideEmpty {
+                if !wideSheet {
                 HStack(alignment: .center, spacing: 10) {
                     Text(table.name)
                         .font(.system(size: 20, weight: .bold)).foregroundColor(Self.ink)
@@ -151,16 +154,16 @@ struct NativeTableSheet: View {
                 .padding(.bottom, 4)
                 }
 
-                if !table.calls.isEmpty { callsBox }
+                if !table.calls.isEmpty && !wideEdit { callsBox }
 
-                if table.groupTableIds.count > 1 {
+                if table.groupTableIds.count > 1 && !wideEdit {
                     Text("グループ " + table.groupTableIds.compactMap { id in model.tables.first { $0.id == id }?.name }.joined(separator: " + "))
                         .font(.system(size: 12, weight: .bold)).foregroundColor(NFColor.royal)
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.horizontal, 10).padding(.vertical, 6)
                         .background(RoundedRectangle(cornerRadius: 8).fill(NFColor.royal.opacity(0.1)))
                 }
-                if let next = table.nextReservation(now: now) {
+                if !wideEdit, let next = table.nextReservation(now: now) {
                     Text("次の予約 \(next.time)　\(stripSama(next.name)) 様（\(next.partySize)名）")
                         .font(.system(size: 12)).monospacedDigit().foregroundColor(NFColor.royal)
                         .frame(maxWidth: .infinity, alignment: .leading)
@@ -169,7 +172,7 @@ struct NativeTableSheet: View {
                 }
 
                 if !seated && state != .cleaning && state != .unavailable { emptyBody }
-                if seated { seatedBody }
+                if seated { if wideEdit { editSheet } else { seatedBody } }
                 if groupOpen { groupPanel }
                 if state == .cleaning && slips.isEmpty {
                     bigButton("清掃完了", en: "Cleaned", fill: .white, textColor: Self.ink, border: Self.line) { Task { await model.act(["type": "floorCleaned", "tableId": table.id]); onClose() } }
@@ -236,6 +239,16 @@ struct NativeTableSheet: View {
         .zIndex(1)
     }
 
+    // 着席中の直し（大きなポップアップ。上の見出しの「変更」から）
+    @ViewBuilder private var editSheet: some View {
+        if let o = table.order, let slip = selected {
+            NativeSetupSheet(model: model, table: table, edit: NFVisitEdit(order: o, slip: slip), embedded: true,
+                             onClose: { guestEditorOpen = false }, onStarted: { _ in guestEditorOpen = false })
+                .id(slip.id)
+                .zIndex(1)
+        }
+    }
+
     // 着席中
     @ViewBuilder private var seatedBody: some View {
         // 人数・顧客・来店・金額のまとめは出さない（卓の箱に出ている。2026-10-24 Ronnie「ポップアップに金額などの詳細は要らない」）
@@ -297,15 +310,6 @@ struct NativeTableSheet: View {
             popBtn("支払メモ", en: "Payment note", icon: "square.and.pencil", on: panel == .memo, enabled: selected != nil) {
                 memoText = ""
                 panel = panel == .memo ? nil : .memo
-            }
-        }
-        if let o = table.order, let slip = selected {
-            // 人数・時間・プランと「変更」は上の見出しの行に
-            if guestEditorOpen {
-            NativeSetupSheet(model: model, table: table, edit: NFVisitEdit(order: o, slip: slip), embedded: true,
-                             onClose: { guestEditorOpen = false }, onStarted: { _ in guestEditorOpen = false })
-                .id(slip.id)
-                .zIndex(1)
             }
         }
         if panel == .merge { mergePanel }
