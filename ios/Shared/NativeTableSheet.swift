@@ -58,7 +58,7 @@ struct NativeTableSheet: View {
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
             // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
             // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
-            NFPopoverLayout(width: wideEmpty ? min(860, UIScreen.main.bounds.width - 60) : Self.width, maxHeight: wideEmpty ? 900 : 760, anchor: nil, fixedTop: 64) {
+            NFPopoverLayout(width: wideEmpty ? 860 : Self.width, maxHeight: wideEmpty ? 900 : 760, anchor: nil, fixedTop: 64) {
                 popup
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(180))
