@@ -416,8 +416,9 @@ struct NativeHomeView: View {
                     }
                     .padding(.horizontal, 28).padding(.vertical, 26)
                     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-                    .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.white))
-                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Self.cardLine, lineWidth: 1))
+                    // 少し色を付ける（2026-10-29 01:23 Ronnie「alli color chamkilo」）注文・会計＝うすい紫、店舗台帳＝うすい黄色
+                    .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(isFloor ? Color(hex: 0xEAE6F7) : Color(hex: 0xFFF3CC)))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(isFloor ? Color(hex: 0xCFC7EA) : Color(hex: 0xF2D06B), lineWidth: 1.5))
                 }
                 .buttonStyle(LiveTapStyle(scale: 0.97))
             }
