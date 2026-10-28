@@ -187,13 +187,9 @@ struct NativeHomeView: View {
                     VStack(spacing: 0) {
                         topBar
                         // 箱のあいだは同じだけ空ける（画面が大きい iPad でも下に寄って空かない）
-                        VStack(spacing: 0) {
-                            tileGrid(columns: 3)
-                            Spacer(minLength: 14)
-                            salesCard(narrow: false)
-                            Spacer(minLength: 14)
-                            clockRow
-                            Spacer(minLength: 14)
+                        VStack(spacing: 14) {
+                            bigTileRow
+                            summaryCard
                             kpiRow(columns: 4)
                         }
                         .padding(.horizontal, 20)
@@ -299,6 +295,8 @@ struct NativeHomeView: View {
         let en: String
         var active = false
         var badge: Int? = nil
+        /// 指定があればこの SF Symbol（左のメニューに足した 伝票明細 など）
+        var symbol: String? = nil
         let action: () -> Void
     }
 
@@ -320,15 +318,16 @@ struct NativeHomeView: View {
 
     /// 左のメニューのアイコンは「ホーム」と同じ線のアイコンで、字と同じ色（地に合わせる。白い四角・色は付けない）。
     /// 形は今までのまま（2026-10-27 01:46 Ronnie「clip sign haruko color home button ko jasto background sanga milne … setting ko alali vayeko chhaina」）
-    private func navIcon(_ n: NavItem, size: CGFloat) -> some View {
+    private func navIcon(_ n: NavItem, size: CGFloat) -> AnyView {
         let sym: String
+        if let own = n.symbol { return AnyView(Image(systemName: own).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)) }
         switch n.icon {
         case "home": sym = "house"
         case "floor": sym = "desktopcomputer"
         case "ledger": sym = "calendar"
         default: sym = Self.toolIcon(n.icon).0
         }
-        return Image(systemName: sym).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)
+        return AnyView(Image(systemName: sym).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size))
     }
 
     private var sidebar: some View {
@@ -342,18 +341,142 @@ struct NativeHomeView: View {
             .frame(maxWidth: .infinity)
             .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1) }
             .padding(.bottom, 6)
-            // 上の 3 つ（ホーム・オーダー・会計・店舗台帳）は大きい箱（アイコンが上）、道具は横長の箱
-            let items = navItems
-            ForEach(Array(items.enumerated()), id: \.element.key) { i, n in
-                navTile(n, tall: i < 1 + bigTiles.count)
+            // 全部の選択肢を左のメニューに（2026-10-28 22:04 Ronnie「option sabai left mai rakha」）
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 4) {
+                    ForEach(Array(sidebarItems.enumerated()), id: \.element.key) { i, n in
+                        if i == 1 + bigTiles.count + Self.sideTools.count { Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 4) }
+                        navCompact(n)
+                    }
+                }
             }
             Spacer(minLength: 0)
-            if let st = tools.first(where: { $0.href == Self.settingsHref }) { navTile(navItem(st), tall: true) }
+            if let st = tools.first(where: { $0.href == Self.settingsHref }) { navCompact(navItem(st)) }
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 14)
         .frame(maxHeight: .infinity)
         .background(Self.sideBg)
+    }
+
+    /// 左のメニューの全部：ホーム・注文・会計・店舗台帳・即会計・入出金・ドロア ＋ 伝票明細・ハンディQR・レジクローズ・仕入・経費・店舗分析・予算登録
+    private var sidebarItems: [NavItem] {
+        var out = navItems
+        for g in gridTiles {
+            out.append(NavItem(key: "g" + g.key, icon: g.key, label: g.label, en: g.en, badge: g.badge, symbol: g.icon, action: g.action))
+        }
+        return out
+    }
+
+    private func navCompact(_ n: NavItem) -> some View {
+        let fg = n.active ? Self.sideActiveText : Self.sideText
+        let sub = n.active ? Self.sideActiveText.opacity(0.7) : Self.sideSub
+        return Button(action: n.action) {
+            VStack(spacing: 2) {
+                navIcon(n, size: 22)
+                Text(n.label).font(.system(size: 11, weight: .regular)).lineLimit(1).minimumScaleFactor(0.6)
+                Text(n.en).font(.system(size: 8, weight: .regular)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.6)
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity).frame(height: 54)
+            .foregroundColor(fg)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(n.active ? Self.sideActive : Color.clear))
+            .overlay(alignment: .topTrailing) {
+                if let b = n.badge, b > 0 {
+                    Text("\(b)").font(.system(size: 10, weight: .regular)).foregroundColor(.white)
+                        .frame(minWidth: 16).padding(.horizontal, 3).frame(height: 16)
+                        .background(Capsule().fill(Color(hex: 0xE53935)))
+                        .offset(x: -2, y: 2)
+                }
+            }
+        }
+        .buttonStyle(PressableStyle(scale: 0.97))
+        .disabled(model.busy && n.key == "#drawer")
+    }
+
+    // MARK: 注文・会計 と 店舗台帳 の大きい白い箱（2026-10-28 22:04 Ronnie の最終見本）
+
+    private var bigTileRow: some View {
+        HStack(spacing: 14) {
+            ForEach(Array(bigTiles.enumerated()), id: \.element.href) { _, t in
+                let isFloor = t.href == "/app/floor"
+                Button(action: { isFloor ? onFloor() : onWeb(t.href) }) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Image(systemName: isFloor ? "list.bullet.rectangle" : "calendar")
+                            .font(.system(size: 44, weight: .ultraLight)).foregroundColor(Self.tileText)
+                        Spacer(minLength: 0)
+                        Text(t.label).font(.system(size: 36, weight: .light)).tracking(1.5).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.6)
+                        Text(t.en).font(.system(size: 13, weight: .regular)).tracking(1.5).foregroundColor(Self.inkSub).padding(.top, 4)
+                    }
+                    .padding(.horizontal, 28).padding(.vertical, 26)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Self.cardLine, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    // MARK: 実績売上・達成率・日付と時計を 1 つの白い箱に
+
+    private var summaryCard: some View {
+        let s = model.payload?.sales
+        return card {
+            HStack(alignment: .center, spacing: 28) {
+                VStack(alignment: .leading, spacing: 8) {
+                    HStack(alignment: .firstTextBaseline, spacing: 10) {
+                        Text("実績売上高").font(.system(size: 15, weight: .regular)).foregroundColor(Self.inkSub)
+                        Text("Sales").font(.system(size: 12)).foregroundColor(Self.inkSub)
+                    }
+                    Text(NT.yen(s?.actual ?? 0)).font(.system(size: 46, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                        .lineLimit(1).minimumScaleFactor(0.6)
+                    HStack(alignment: .top, spacing: 32) {
+                        VStack(alignment: .leading, spacing: 2) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("予算売上高").font(.system(size: 13, weight: .regular))
+                                Text("Target").font(.system(size: 11))
+                            }
+                            .foregroundColor(Self.inkSub)
+                            Text(s?.budget.map { NT.yen($0) } ?? "—").font(.system(size: 20, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                        }
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("客単価").font(.system(size: 13, weight: .regular)).foregroundColor(Self.inkSub)
+                            Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 20, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                        }
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise").font(.system(size: 10))
+                        Text(s?.asOf ?? "").font(.system(size: 11))
+                        if let n = s?.note { Text(n).font(.system(size: 11)) }
+                    }
+                    .foregroundColor(Self.inkSub)
+                }
+                ring(s, size: 124)
+                Spacer(minLength: 0)
+                Rectangle().fill(Self.cardLine).frame(width: 1, height: 110)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Self.dateFmt.string(from: model.now)).font(.system(size: 14, weight: .regular)).foregroundColor(Self.inkSub)
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(Self.hmFmt.string(from: model.now)).font(.system(size: 46, weight: .light)).monospacedDigit()
+                        Text(Self.ssFmt.string(from: model.now)).font(.system(size: 16, weight: .light)).monospacedDigit().opacity(0.5)
+                    }
+                    .foregroundColor(Self.ink)
+                    HStack(spacing: 8) {
+                        if let t = model.payload?.weather.temperature {
+                            if let sym = model.payload?.weather.symbol { Image(systemName: sym).font(.system(size: 18, weight: .regular)) }
+                            Text("\(Int(t.rounded()))°").font(.system(size: 18, weight: .regular))
+                        }
+                        if let p = model.payload?.weather.place { Text(p).font(.system(size: 13, weight: .regular)).lineLimit(1) }
+                    }
+                    .foregroundColor(Self.inkSub)
+                }
+                .frame(minWidth: 220, alignment: .leading)
+            }
+            .padding(.horizontal, 32).padding(.vertical, 18)
+        }
+        .frame(height: 190)
     }
 
     private func navTile(_ n: NavItem, tall: Bool) -> some View {
