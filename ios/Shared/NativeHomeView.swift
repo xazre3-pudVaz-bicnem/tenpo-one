@@ -174,8 +174,9 @@ struct NativeHomeView: View {
     private static let gridOrder = ["/app/orders", "#handyqr", "/app/cash/close", "/app/expenses", "#analytics", "#budget"]
 
     private var tools: [NHTool] { model.payload?.tools ?? [] }
+    /// 大きい2つの名前（2026-10-29 04:13 Ronnie）：注文・会計 ／ テーブル管理、ご予約管理 ／ テーブルリンク（大きい字が名前、小さい字が下の言葉）
     private var bigTiles: [NHNamed] {
-        model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "注文・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "テーブルリンク", en: "TABLE LINK")]
+        [NHNamed(href: "/app/floor", label: "注文・会計", en: "テーブル管理"), NHNamed(href: "/app/reservations", label: "ご予約管理", en: "テーブルリンク")]
     }
 
     var body: some View {
