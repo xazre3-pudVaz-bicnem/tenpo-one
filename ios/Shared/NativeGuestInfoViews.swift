@@ -247,7 +247,7 @@ struct NativeSetupSheet: View {
         rowDivider
         wideLabelRow("終了前注意", en: "Last call", grow: true) {
             checkBox($warningEnabled, enabled: timed)
-            dropField("\(warningMinutes)分前", value: $warningMinutes, options: Array(Set([5, 10, 15, 20, 30, 45, 60, 90, warningMinutes])).sorted(), show: { "\($0)分前" }, enabled: timed && warningEnabled)
+            dropField("\(warningMinutes)分前", value: $warningMinutes, options: [15, 30, 45, 60], show: { "\($0)分前" }, enabled: timed && warningEnabled)
         }
         rowDivider
         wideLabelRow("開始時刻", en: "Start time", grow: true) {
