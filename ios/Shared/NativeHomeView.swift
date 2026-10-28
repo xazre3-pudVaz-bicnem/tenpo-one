@@ -320,8 +320,6 @@ struct NativeHomeView: View {
     /// 形は今までのまま（2026-10-27 01:46 Ronnie「clip sign haruko color home button ko jasto background sanga milne … setting ko alali vayeko chhaina」）
     private func navIcon(_ n: NavItem, size: CGFloat) -> AnyView {
         let sym: String
-        // 注文・会計 は箱と同じ 4 つの四角のロゴ（2026-10-29 01:09 Ronnie）
-        if n.icon == "floor" { return AnyView(FourSquareLogo(size: size * 0.66, color: n.active ? Self.sideActiveText : Self.sideText).frame(width: size, height: size)) }
         if let own = n.symbol { return AnyView(Image(systemName: own).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)) }
         switch n.icon {
         case "home": sym = "house"
@@ -405,7 +403,7 @@ struct NativeHomeView: View {
                 Button(action: { isFloor ? onFloor() : onWeb(t.href) }) {
                     VStack(alignment: .center, spacing: 14) {
                         if isFloor {
-                            FourSquareLogo(size: 56, color: Self.sideBg)
+                            Image(systemName: "desktopcomputer").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.sideBg)
                         } else {
                             Image(systemName: "calendar").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.sideBg)
                         }
@@ -778,26 +776,5 @@ struct NativeHomeView: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
         }
-    }
-}
-
-
-/// 4 つの小さい四角を 1 か所にまとめたロゴ（注文・会計の箱。2026-10-29 00:23 Ronnie）
-struct FourSquareLogo: View {
-    var size: CGFloat = 56
-    var color: Color
-    var body: some View {
-        let gap = size * 0.12
-        let cell = (size - gap) / 2
-        VStack(spacing: gap) {
-            HStack(spacing: gap) { square(cell); square(cell) }
-            HStack(spacing: gap) { square(cell); square(cell) }
-        }
-        .frame(width: size, height: size)
-    }
-    private func square(_ s: CGFloat) -> some View {
-        RoundedRectangle(cornerRadius: s * 0.22, style: .continuous)
-            .stroke(color, lineWidth: 1.6)
-            .frame(width: s, height: s)
     }
 }
