@@ -320,6 +320,8 @@ struct NativeHomeView: View {
     /// 形は今までのまま（2026-10-27 01:46 Ronnie「clip sign haruko color home button ko jasto background sanga milne … setting ko alali vayeko chhaina」）
     private func navIcon(_ n: NavItem, size: CGFloat) -> AnyView {
         let sym: String
+        // 注文・会計 は箱と同じ、画面の中に 4 つの四角があるモニター（2026-10-29 01:14 Ronnie）
+        if n.icon == "floor" { return AnyView(MonitorLogo(size: size * 0.8, color: n.active ? Self.sideActiveText : Self.sideText, line: 1.3).frame(width: size, height: size)) }
         if let own = n.symbol { return AnyView(Image(systemName: own).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)) }
         switch n.icon {
         case "home": sym = "house"
@@ -403,7 +405,7 @@ struct NativeHomeView: View {
                 Button(action: { isFloor ? onFloor() : onWeb(t.href) }) {
                     VStack(alignment: .center, spacing: 14) {
                         if isFloor {
-                            Image(systemName: "desktopcomputer").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.sideBg)
+                            MonitorLogo(size: 62, color: Self.sideBg, line: 1.6)
                         } else {
                             Image(systemName: "calendar").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.sideBg)
                         }
@@ -776,5 +778,32 @@ struct NativeHomeView: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
         }
+    }
+}
+
+/// 画面の中に 4 つの小さい四角があるモニターのロゴ（注文・会計）
+struct MonitorLogo: View {
+    var size: CGFloat = 62
+    var color: Color
+    var line: CGFloat = 1.5
+    var body: some View {
+        let w = size
+        let h = size * 0.68
+        let gap = w * 0.07
+        let cell = (h - w * 0.2 - gap) / 2
+        VStack(spacing: size * 0.05) {
+            ZStack {
+                RoundedRectangle(cornerRadius: w * 0.1, style: .continuous).stroke(color, lineWidth: line).frame(width: w, height: h)
+                VStack(spacing: gap) {
+                    HStack(spacing: gap) { sq(cell); sq(cell) }
+                    HStack(spacing: gap) { sq(cell); sq(cell) }
+                }
+            }
+            Rectangle().fill(color).frame(width: w * 0.3, height: line)
+        }
+        .frame(width: size, height: size)
+    }
+    private func sq(_ s: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: s * 0.2, style: .continuous).stroke(color, lineWidth: line).frame(width: s, height: s)
     }
 }
