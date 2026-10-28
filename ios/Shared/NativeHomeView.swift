@@ -368,7 +368,9 @@ struct NativeHomeView: View {
         // 注文・会計 と 店舗台帳 は大きい箱が本体にあるので、左のメニューには入れない（2026-10-29 01:24 Ronnie「Menu bar ma kina chaiyo ra」）
         let bigKeys = Set(bigTiles.map { $0.href })
         var out = navItems.filter { !bigKeys.contains($0.key) }
-        for g in gridTiles {
+        // ハンディQR はメニューのいちばん最後（2026-10-29 01:56 Ronnie）
+        let ordered = gridTiles.filter { $0.key != "#handyqr" } + gridTiles.filter { $0.key == "#handyqr" }
+        for g in ordered {
             out.append(NavItem(key: "g" + g.key, icon: g.key, label: g.label, en: g.en, badge: g.badge, symbol: g.icon, action: g.action))
         }
         return out
