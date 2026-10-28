@@ -61,7 +61,7 @@ struct NativeTableSheet: View {
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
             // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
             // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
-            NFPopoverLayout(width: wideSheet ? 860 : Self.width, maxHeight: wideSheet ? 900 : 760, anchor: nil, fixedTop: nil) {
+            NFPopoverLayout(width: wideSheet ? 860 : Self.width, maxHeight: wideSheet ? 900 : 760, anchor: nil, fixedTop: nil, rightLimit: wideSheet ? 0.765 : nil) {
                 popup
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(180))
@@ -687,6 +687,8 @@ struct NFPopoverLayout: Layout {
     var topInset: CGFloat = 64
     /// anchor が無いとき、上の端をこの高さにそろえる（nil なら上下の真ん中）
     var fixedTop: CGFloat? = nil
+    /// 右の予約の列にかぶらないように、右の端をこの割合（画面の幅に対して）までにする（nil＝真ん中のまま）
+    var rightLimit: CGFloat? = nil
     private let gap: CGFloat = 12
 
     func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout ()) -> CGSize {
@@ -727,6 +729,7 @@ struct NFPopoverLayout: Layout {
         } else {
             x = max(margin, (W - w) / 2); y = max(margin, (H - h) / 2)
         }
+        if anchor == nil || anchor == .zero, let r = rightLimit { x = max(margin, min(x, W * r - w)) }
         card.place(at: CGPoint(x: bounds.minX + x, y: bounds.minY + y), anchor: .topLeading, proposal: ProposedViewSize(width: w, height: h))
         for i in 1..<subviews.count {
             let size = i <= 2 ? ProposedViewSize(width: 26, height: 12) : ProposedViewSize(width: 12, height: 26)
