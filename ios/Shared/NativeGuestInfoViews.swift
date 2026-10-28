@@ -200,7 +200,7 @@ struct NativeSetupSheet: View {
     private var wideLayout: some View {
         VStack(alignment: .leading, spacing: 14) {
             HStack(alignment: .center) {
-                Text(table.name).font(.system(size: 30, weight: NT.strong)).foregroundColor(NFColor.ink)
+                Text(table.name).font(.system(size: 26, weight: NT.strong)).foregroundColor(NFColor.ink)
                 Spacer()
                 Button(action: onClose) {
                     HStack(spacing: 8) {
@@ -223,7 +223,7 @@ struct NativeSetupSheet: View {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("タイマー設定").font(.system(size: 13)).foregroundColor(NFColor.ink3).padding(.leading, 4)
                     // 右のテンキーと同じ高さまで広げる：行をゆったり・字を大きく（2026-10-28 17:49 Ronnie「timer ko tala ko khali space、timer lai alli thulo banayera space milau」）
-                    card { timerRows }.frame(maxHeight: .infinity)
+                    card { timerRows }
                     if let leftFooter { leftFooter }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
@@ -252,9 +252,9 @@ struct NativeSetupSheet: View {
         rowDivider
         wideLabelRow("開始時刻", en: "Start time", grow: true) {
             Button { startNow = true; startChanged = true } label: {
-                Text("今").font(.system(size: 18, weight: .medium))
+                Text("今").font(.system(size: 16, weight: .medium))
                     .foregroundColor(startNow ? .white : NFColor.ink)
-                    .frame(width: 42, height: 42)
+                    .frame(width: 38, height: 38)
                     .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(startNow ? GIColor.navy : NFColor.fieldBg))
             }
             .buttonStyle(PressableStyle())
@@ -270,7 +270,7 @@ struct NativeSetupSheet: View {
         wideLabelRow("L.O.", en: "Last order", grow: true) {
             Spacer(minLength: 0)
             Text(timed ? nfHm(effectiveStart.addingTimeInterval(Double(duration - (warningEnabled ? warningMinutes : 0)) * 60)) : "—")
-                .font(.system(size: 28, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
+                .font(.system(size: 24, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
         }
     }
 
@@ -337,25 +337,25 @@ struct NativeSetupSheet: View {
     private func wideLabelRow<Right: View>(_ ja: String, en: String, grow: Bool = false, @ViewBuilder right: () -> Right) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
-                Text(ja).font(.system(size: 20, weight: .medium)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
-                Text(en).font(.system(size: 13)).foregroundColor(NFColor.ink3).lineLimit(1)
+                Text(ja).font(.system(size: 17, weight: .medium)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(en).font(.system(size: 11)).foregroundColor(NFColor.ink3).lineLimit(1)
             }
-            .frame(width: 118, alignment: .leading)
+            .frame(width: 104, alignment: .leading)
             right()
         }
         .padding(.horizontal, 14)
-        .frame(minHeight: grow ? 72 : 66, maxHeight: grow ? .infinity : 66)
+        .frame(height: grow ? 68 : 50)
     }
 
     /// タップで小さなポップアップを開く欄（モード・プラン）
     private func chooseField(_ text: String, action: @escaping () -> Void) -> some View {
         Button(action: action) {
             HStack {
-                Text(text).font(.system(size: 20, weight: .regular)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(text).font(.system(size: 17, weight: .regular)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 4)
-                Image(systemName: "chevron.down").font(.system(size: 14, weight: .medium)).foregroundColor(NFColor.ink3)
+                Image(systemName: "chevron.down").font(.system(size: 13, weight: .medium)).foregroundColor(NFColor.ink3)
             }
-            .padding(.horizontal, 14).frame(height: 50)
+            .padding(.horizontal, 14).frame(height: 40)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
         }
         .buttonStyle(PressableStyle(scale: 0.99))
@@ -367,11 +367,11 @@ struct NativeSetupSheet: View {
             Picker("", selection: value) { ForEach(options, id: \.self) { Text(show($0)).tag($0) } }
         } label: {
             HStack(spacing: 4) {
-                Text(text).font(.system(size: 24, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(text).font(.system(size: 18, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
                 Spacer(minLength: 2)
                 Image(systemName: "chevron.down").font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
             }
-            .padding(.horizontal, 12).frame(height: 54)
+            .padding(.horizontal, 10).frame(height: 42)
             .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
         }
         .disabled(!enabled)
@@ -379,13 +379,13 @@ struct NativeSetupSheet: View {
     }
 
     private func unitText(_ t: String) -> some View {
-        Text(t).font(.system(size: 16)).foregroundColor(NFColor.ink3)
+        Text(t).font(.system(size: 14)).foregroundColor(NFColor.ink3)
     }
 
     private func checkBox(_ on: Binding<Bool>, enabled: Bool) -> some View {
         Button { on.wrappedValue.toggle() } label: {
             Image(systemName: on.wrappedValue ? "checkmark.square.fill" : "square")
-                .font(.system(size: 32, weight: .regular))
+                .font(.system(size: 28, weight: .regular))
                 .foregroundColor(on.wrappedValue ? GIColor.navy.opacity(0.75) : NFColor.ink3)
         }
         .buttonStyle(.plain)
