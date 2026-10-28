@@ -227,7 +227,7 @@ struct NativeSetupSheet: View {
                     if let leftFooter { leftFooter }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                keypadPanel.frame(maxWidth: .infinity)
+                keypadPanel.frame(minWidth: 470).layoutPriority(1)
             }
             if let problem {
                 Text(problem).font(.system(size: 13)).foregroundColor(NFColor.danger)
@@ -237,7 +237,7 @@ struct NativeSetupSheet: View {
     }
 
     @ViewBuilder private var timerRows: some View {
-        wideLabelRow("時間制", en: "Time limit") {
+        wideLabelRow("時間制", en: "Time limit", grow: true) {
             checkBox($timed, enabled: true)
             dropField("\(duration / 60)", value: Binding(get: { duration / 60 }, set: { duration = max(15, $0 * 60 + duration % 60) }), options: Array(0...10), show: { "\($0)" }, enabled: timed)
             unitText("時間")
@@ -245,12 +245,12 @@ struct NativeSetupSheet: View {
             unitText("分")
         }
         rowDivider
-        wideLabelRow("終了前注意", en: "Last call") {
+        wideLabelRow("終了前注意", en: "Last call", grow: true) {
             checkBox($warningEnabled, enabled: timed)
             dropField("\(warningMinutes)分前", value: $warningMinutes, options: Array(Set([5, 10, 15, 20, 30, 45, 60, 90, warningMinutes])).sorted(), show: { "\($0)分前" }, enabled: timed && warningEnabled)
         }
         rowDivider
-        wideLabelRow("開始時刻", en: "Start time") {
+        wideLabelRow("開始時刻", en: "Start time", grow: true) {
             Button { startNow = true; startChanged = true } label: {
                 Text("今").font(.system(size: 18, weight: .medium))
                     .foregroundColor(startNow ? .white : NFColor.ink)
@@ -267,7 +267,7 @@ struct NativeSetupSheet: View {
             unitText("分")
         }
         rowDivider
-        wideLabelRow("L.O.", en: "Last order") {
+        wideLabelRow("L.O.", en: "Last order", grow: true) {
             Spacer(minLength: 0)
             Text(timed ? nfHm(effectiveStart.addingTimeInterval(Double(duration - (warningEnabled ? warningMinutes : 0)) * 60)) : "—")
                 .font(.system(size: 28, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
@@ -334,7 +334,7 @@ struct NativeSetupSheet: View {
         .fixedSize(horizontal: false, vertical: true)
     }
 
-    private func wideLabelRow<Right: View>(_ ja: String, en: String, @ViewBuilder right: () -> Right) -> some View {
+    private func wideLabelRow<Right: View>(_ ja: String, en: String, grow: Bool = false, @ViewBuilder right: () -> Right) -> some View {
         HStack(spacing: 10) {
             VStack(alignment: .leading, spacing: 0) {
                 Text(ja).font(.system(size: 20, weight: .medium)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
@@ -344,7 +344,7 @@ struct NativeSetupSheet: View {
             right()
         }
         .padding(.horizontal, 14)
-        .frame(minHeight: 70, maxHeight: .infinity)
+        .frame(minHeight: grow ? 72 : 66, maxHeight: grow ? .infinity : 66)
     }
 
     /// タップで小さなポップアップを開く欄（モード・プラン）
