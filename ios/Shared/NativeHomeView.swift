@@ -439,10 +439,12 @@ struct NativeHomeView: View {
         return card {
             HStack(alignment: .center, spacing: 28) {
                 VStack(alignment: .leading, spacing: 8) {
-                    HStack(alignment: .firstTextBaseline, spacing: 10) {
-                        Text("実績売上高").font(.system(size: 15, weight: .regular)).foregroundColor(Self.inkSub)
-                        Text("Sales").font(.system(size: 12)).foregroundColor(Self.inkSub)
+                    // 英語は日本語の下（2026-10-29 01:58 Ronnie「日本語ko tala english lekha」）
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("実績売上高").font(.system(size: 15, weight: .regular))
+                        Text("Sales").font(.system(size: 12))
                     }
+                    .foregroundColor(Self.inkSub)
                     Text(NT.yen(s?.actual ?? 0)).font(.system(size: 46, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
                         .lineLimit(1).minimumScaleFactor(0.6)
                     HStack(alignment: .top, spacing: 32) {
