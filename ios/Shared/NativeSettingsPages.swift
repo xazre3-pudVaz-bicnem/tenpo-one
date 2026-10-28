@@ -3246,7 +3246,7 @@ struct NativeSteraLANSetup: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             NTPopupLabel(title: "\(terminal.name)・LAN設定", subtitle: "LAN setup on this device")
-            Text("iPadとsteraを同じルーターのWi-Fi／LANにつなぎ、連動アプリに表示される決済端末IDを登録してください。IPアドレスの手入力は通常不要です。")
+            Text("iPadとsteraを同じルーターのWi-Fi／LANにつなぎ、連動アプリに表示される決済端末IDを登録してください。自動探索は未実装のため、現時点では登録のみ可能です。")
                 .font(.system(size: 13)).foregroundColor(NT.ink2)
             NTPopupLabel(title: "決済端末ID", subtitle: "Terminal ID")
             TextField("連動アプリに表示されるID", text: $terminalID)
@@ -3255,7 +3255,7 @@ struct NativeSteraLANSetup: View {
             DisclosureGroup("詳細設定（IPアドレスを手動指定）") {
                 VStack(alignment: .leading, spacing: 8) {
                     NTPopupLabel(title: "IPアドレス（任意）", subtitle: "Optional manual IP address")
-                    TextField("空欄：端末IDで自動検索", text: $host)
+                    TextField("空欄：自動検索待ち（未実装）", text: $host)
                         .keyboardType(.numbersAndPunctuation).textInputAutocapitalization(.never).autocorrectionDisabled()
                         .textFieldStyle(.roundedBorder).disabled(!canEdit)
                     if !host.isEmpty && !SteraLANConfiguration.isLANIPv4(configuration.host) {
@@ -3362,7 +3362,7 @@ final class NativePaymentsModel: NSPModel<NPYPayload> {
         _ = await run("presets", body, done: "会計の選択肢を保存しました（レジにすぐ反映）")
     }
     func addStera() async {
-        if await run("steraAdd", ["type": "steraAdd", "name": steraName, "terminalNo": steraNo], done: "追加しました。リンクコードを端末のアプリに入れてください") { steraName = ""; steraNo = "" }
+        if await run("steraAdd", ["type": "steraAdd", "name": steraName, "terminalNo": steraNo], done: "端末を登録しました。接続はまだ確認されていません") { steraName = ""; steraNo = "" }
     }
     func addReader() async {
         if await run("readerAdd", ["type": "readerAdd", "label": readerLabel], done: "決済端末を登録しました") { readerLabel = "" }
@@ -3442,7 +3442,7 @@ struct NativePaymentsView: View {
     private func statusChip(_ p: NPYPayload) -> some View {
         HStack(spacing: 6) {
             chip("Stripe", p.stripe.configured ? (p.stripe.testMode ? "テストモード" : "本番") : "未接続", p.stripe.configured ? (p.stripe.testMode ? NFColor.saffron : NFColor.danger) : NFColor.ink3)
-            chip("stera", p.stera.terminals.contains { $0.online } ? "接続済み" : (p.stera.terminals.isEmpty ? "手動運用" : "未接続"), p.stera.terminals.contains { $0.online } ? NFColor.success : NFColor.ink3)
+            chip("stera", p.stera.terminals.contains { $0.online } ? "クラウド応答あり" : (p.stera.terminals.isEmpty ? "未登録" : "登録済み・応答なし"), p.stera.terminals.contains { $0.online } ? NFColor.success : NFColor.ink3)
         }
     }
     private func chip(_ name: String, _ status: String, _ color: Color) -> some View {
@@ -3597,7 +3597,7 @@ struct NativePaymentsView: View {
                                     Text(t.name).font(.system(size: 15, weight: .bold)).foregroundColor(NFColor.ink)
                                     if !t.active { Text("停止中").font(.system(size: 10.5, weight: .bold)).foregroundColor(NFColor.ink3).padding(.horizontal, 6).padding(.vertical, 1).background(Capsule().fill(NFColor.lilac)) }
                                 }
-                                Text([t.terminalNo.map { "端末番号 \($0)" }, t.online ? "つながっています" : (t.lastSeenLabel.map { "最後の接続 \($0)" } ?? "まだ接続がありません"), t.appVersion.map { "アプリ \($0)" }].compactMap { $0 }.joined(separator: "・"))
+                                Text([t.terminalNo.map { "端末番号 \($0)" }, t.online ? "クラウド応答あり（LAN未確認）" : (t.lastSeenLabel.map { "登録済み・最後の応答 \($0)" } ?? "登録済み・接続未確認"), t.appVersion.map { "アプリ \($0)" }].compactMap { $0 }.joined(separator: "・"))
                                     .font(.system(size: 12)).foregroundColor(NFColor.ink3)
                                 HStack(spacing: 6) {
                                     Image(systemName: "key").font(.system(size: 13, weight: .bold))

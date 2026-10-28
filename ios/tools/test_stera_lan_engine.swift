@@ -77,6 +77,15 @@ private actor FailingJournal: SteraLANJournal {
     func acknowledge(_ attemptID: String) async throws { throw SteraLANError.journalUnavailable }
 }
 
+private actor UpdateFailingJournal: SteraLANJournal {
+    let base: SteraLANFileJournal
+    init(_ base: SteraLANFileJournal) { self.base = base }
+    func load() async throws -> SteraLANJournalRecord? { try await base.load() }
+    func reserve(_ attempt: SteraLANAttempt) async throws { try await base.reserve(attempt) }
+    func update(_ result: SteraLANResult) async throws -> SteraLANJournalRecord { throw SteraLANError.journalUnavailable }
+    func acknowledge(_ attemptID: String) async throws { try await base.acknowledge(attemptID) }
+}
+
 @main @MainActor private struct SteraLANEngineTests {
     static func check(_ value: Bool, _ description: String) throws {
         if !value { throw TestFailure.assertion(description) }
@@ -222,6 +231,33 @@ private actor FailingJournal: SteraLANJournal {
         let corruptEngine = SteraLANEngine(driver: driver, journal: SteraLANFileJournal(url: corruptURL))
         try await expect(.journalUnavailable) { _ = try await corruptEngine.connect(terminalID: "T1") }
         try check(await driver.startIDs.count == count, "Corrupt storage must fail closed without sending")
+        tests += 1
+        // A charge may succeed while persisting its response fails. Never resend it.
+        let writeJournal = journal(root, "result-write-failure")
+        let writeDriver = FakeDriver()
+        let writeEngine = SteraLANEngine(driver: writeDriver, journal: UpdateFailingJournal(writeJournal))
+        _ = try await writeEngine.connect(terminalID: "T1")
+        for amount in [0, -1, 100_000_000] {
+            try await expect(.invalidPayment) { _ = try await writeEngine.startPayment(orderID: "O", amount: amount) }
+            tests += 1
+        }
+        try await expect(.invalidPayment) { _ = try await writeEngine.startPayment(orderID: "  ", amount: 100) }
+        try check(await writeDriver.startIDs.isEmpty, "Invalid payments must never reach driver")
+        tests += 1
+        try await expect(.journalUnavailable) { _ = try await writeEngine.startPayment(orderID: "O", amount: 100) }
+        guard let reserved = try await writeEngine.pendingAttempt() else { throw TestFailure.assertion("Lost durable reservation") }
+        let retryEngine = SteraLANEngine(driver: writeDriver, journal: writeJournal)
+        _ = try await retryEngine.connect(terminalID: "T1")
+        try await expect(.unresolvedAttempt) { _ = try await retryEngine.startPayment(orderID: "O", amount: 100) }
+        let reconciled = try await retryEngine.recoverPayment()
+        try check(reconciled.attempt == reserved.attempt && reconciled.isResolved, "Restart must recover original attempt after result write fails")
+        try check(await writeDriver.startIDs.count == 1, "Result storage failure must not cause resend")
+        tests += 1
+        try await expect(.noPendingAttempt) { try await retryEngine.acknowledgeResolvedPayment(attemptID: "wrong") }
+        try check(try await retryEngine.pendingAttempt() == reconciled, "Wrong acknowledgement must retain result")
+        tests += 1
+        try await retryEngine.acknowledgeResolvedPayment(attemptID: reconciled.attempt.id)
+        try check(try await retryEngine.pendingAttempt() == nil, "Persisted outcome can be acknowledged")
         tests += 1
         print("PASS: \(tests) stera LAN engine safety scenarios (fake driver only; no terminal communication)")
     }
