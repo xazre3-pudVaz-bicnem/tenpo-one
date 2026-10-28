@@ -462,6 +462,8 @@ struct NativeHomeView: View {
                     }
                     .foregroundColor(Self.inkSub)
                 }
+                // 丸は左の字と右の時計の真ん中（2026-10-29 01:41 Ronnie「Round alli tada banau like middle」）
+                Spacer(minLength: 0)
                 ring(s, size: 124)
                 Spacer(minLength: 0)
                 Rectangle().fill(Self.cardLine).frame(width: 1, height: 110)
