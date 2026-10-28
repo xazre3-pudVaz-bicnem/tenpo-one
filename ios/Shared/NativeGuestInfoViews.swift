@@ -227,7 +227,7 @@ struct NativeSetupSheet: View {
                     if let leftFooter { leftFooter }
                 }
                 .frame(maxWidth: .infinity, alignment: .topLeading)
-                keypadPanel.frame(minWidth: 470).layoutPriority(1)
+                keypadPanel.frame(maxWidth: .infinity)
             }
             if let problem {
                 Text(problem).font(.system(size: 13)).foregroundColor(NFColor.danger)
