@@ -69,7 +69,7 @@ struct NPSPaymentsPage: View {
         let steraOn = p.stera.terminals.contains { $0.online }
         return HStack(spacing: 8) {
             chip("Stripe", p.stripe.configured ? (p.stripe.testMode ? "テストモード" : "本番") : "未接続", p.stripe.configured ? (p.stripe.testMode ? NT.warn : NT.ok) : NT.ink3)
-            chip("stera", steraOn ? "接続済み" : (p.stera.terminals.isEmpty ? "手動運用" : "未接続"), steraOn ? NT.ok : NT.ink3)
+            chip("stera", steraOn ? "クラウド応答あり" : (p.stera.terminals.isEmpty ? "未登録" : "登録済み・応答なし"), steraOn ? NT.ok : NT.ink3)
             Spacer(minLength: 0)
         }
     }
@@ -221,7 +221,7 @@ struct NPSPaymentsPage: View {
                     if !t.active { NPSTag(text: "停止中") }
                     Spacer()
                 }
-                Text([t.terminalNo.map { "端末番号 \($0)" }, t.online ? "つながっています" : (t.lastSeenLabel.map { "最後の接続 \($0)" } ?? "まだ接続がありません"), t.appVersion.map { "アプリ \($0)" }]
+                Text([t.terminalNo.map { "端末番号 \($0)" }, t.online ? "クラウド応答あり（LAN未確認）" : (t.lastSeenLabel.map { "登録済み・最後の応答 \($0)" } ?? "登録済み・接続未確認"), t.appVersion.map { "アプリ \($0)" }]
                         .compactMap { $0 }.joined(separator: "・"))
                     .font(.system(size: 11.5)).foregroundColor(NT.ink3)
                 HStack(spacing: 6) {

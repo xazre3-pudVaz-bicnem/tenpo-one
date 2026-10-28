@@ -114,3 +114,27 @@ results, and restart after payment succeeds before checkout confirmation.
 
 No live payment or provider communication was performed during this review.
 No verified direct-LAN driver is currently available in this checkout.
+
+
+## Follow-up — 2026-10-28 (Ronnie report)
+
+- Ronnie clarified that SMBC's phone statement meant no additional application
+  or procedure is required and integration should be implemented in code. This
+  is not a statement that a specification/SDK will not be supplied, nor a LAN
+  wire specification. Applicable discovery/payment messages remain unverified.
+- Continue from restored branch `claude/stera-restore-20261028` (706b325).
+  Checkout appearance and customer/table popups are excluded from this work.
+- iPad/iPhone settings now distinguish registration, cloud heartbeat response,
+  and unverified LAN connectivity. A heartbeat is not a successful payment test.
+- Additional fake-driver scenarios cover invalid amounts/order IDs, a payment
+  response that cannot be persisted, restart recovery without resend, and an
+  incorrect acknowledgement ID retaining the result.
+- Tomorrow's first hardware check requires terminal model, integration-app
+  version, terminal-ID screen and communication settings (IP/subnet). Confirm
+  iPad and terminal share a router. Do not collect cardholder data or credentials.
+- First check connectivity/configuration without initiating payment. No LAN
+  driver or real terminal payment was implemented/run in this follow-up.
+
+Validation: Swift 5 and Swift 6 each pass 26 fake-driver safety scenarios;
+settings Swift syntax parsing and git whitespace checks pass. A full iOS build
+and real-device UI/terminal verification have not been performed for this change.
