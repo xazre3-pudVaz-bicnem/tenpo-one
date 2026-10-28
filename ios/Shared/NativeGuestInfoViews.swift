@@ -361,21 +361,9 @@ struct NativeSetupSheet: View {
         .buttonStyle(PressableStyle(scale: 0.99))
     }
 
-    /// 時・分・分前の選び（▾ を押すとその場で選ぶ）
+    /// 時・分・分前の選び（▾ を押すと 4 つ分の高さの一覧が出て、残りはスクロール。2026-10-28 18:35 Ronnie「4 ota samma option、aru scroll」）
     private func dropField<T: Hashable>(_ text: String, value: Binding<T>, options: [T], show: @escaping (T) -> String, enabled: Bool) -> some View {
-        Menu {
-            Picker("", selection: value) { ForEach(options, id: \.self) { Text(show($0)).tag($0) } }
-        } label: {
-            HStack(spacing: 4) {
-                Text(text).font(.system(size: 18, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 2)
-                Image(systemName: "chevron.down").font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
-            }
-            .padding(.horizontal, 10).frame(height: 42)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
-        }
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.4)
+        NFDropField(text: text, value: value, options: options, show: show, enabled: enabled)
     }
 
     private func unitText(_ t: String) -> some View {
@@ -1424,3 +1412,55 @@ struct NFNumberPad: View {
 /// 顧客の検索結果（Web の PosCustomerSearchResult）
 struct NFCustomerHit: Codable, Identifiable, Hashable { let id: String; let name: String; let phone: String?; let pointBalance: Int }
 struct NFCustomerSearch: Codable { let results: [NFCustomerHit] }
+
+
+/// ドロップダウン：押すと小さな一覧（4 つ分の高さ・あとはスクロール）
+struct NFDropField<T: Hashable>: View {
+    let text: String
+    @Binding var value: T
+    let options: [T]
+    let show: (T) -> String
+    let enabled: Bool
+    @State private var open = false
+    private let rowH: CGFloat = 46
+
+    var body: some View {
+        Button { open = true } label: {
+            HStack(spacing: 4) {
+                Text(text).font(.system(size: 18, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.down").font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 10).frame(height: 42)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
+        }
+        .buttonStyle(PressableStyle(scale: 0.98))
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+        .popover(isPresented: $open) {
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        ForEach(options, id: \.self) { o in
+                            Button { value = o; open = false } label: {
+                                HStack {
+                                    Text(show(o)).font(.system(size: 20)).monospacedDigit().foregroundColor(NFColor.ink)
+                                    Spacer(minLength: 8)
+                                    if o == value { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundColor(GIColor.navy) }
+                                }
+                                .padding(.horizontal, 16).frame(height: rowH)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .id(o)
+                            Divider()
+                        }
+                    }
+                }
+                .frame(width: 150, height: rowH * CGFloat(min(4, options.count)))
+                .onAppear { proxy.scrollTo(value, anchor: .center) }
+            }
+            .presentationCompactAdaptation(.popover)
+        }
+    }
+}
