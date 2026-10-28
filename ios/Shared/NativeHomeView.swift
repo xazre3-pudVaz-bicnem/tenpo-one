@@ -347,7 +347,7 @@ struct NativeHomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 4) {
                     ForEach(Array(sidebarItems.enumerated()), id: \.element.key) { i, n in
-                        if i == 1 + bigTiles.count + Self.sideTools.count { Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 4) }
+                        if i == 1 + Self.sideTools.count { Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 4) }
                         navCompact(n)
                     }
                 }
@@ -363,7 +363,9 @@ struct NativeHomeView: View {
 
     /// 左のメニューの全部：ホーム・注文・会計・店舗台帳・即会計・入出金・ドロア ＋ 伝票明細・ハンディQR・レジクローズ・仕入・経費・店舗分析・予算登録
     private var sidebarItems: [NavItem] {
-        var out = navItems
+        // 注文・会計 と 店舗台帳 は大きい箱が本体にあるので、左のメニューには入れない（2026-10-29 01:24 Ronnie「Menu bar ma kina chaiyo ra」）
+        let bigKeys = Set(bigTiles.map { $0.href })
+        var out = navItems.filter { !bigKeys.contains($0.key) }
         for g in gridTiles {
             out.append(NavItem(key: "g" + g.key, icon: g.key, label: g.label, en: g.en, badge: g.badge, symbol: g.icon, action: g.action))
         }
