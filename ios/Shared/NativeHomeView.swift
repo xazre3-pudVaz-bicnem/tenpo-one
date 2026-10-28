@@ -320,6 +320,8 @@ struct NativeHomeView: View {
     /// 形は今までのまま（2026-10-27 01:46 Ronnie「clip sign haruko color home button ko jasto background sanga milne … setting ko alali vayeko chhaina」）
     private func navIcon(_ n: NavItem, size: CGFloat) -> AnyView {
         let sym: String
+        // 注文・会計 は箱と同じ 4 つの四角のロゴ（2026-10-29 01:09 Ronnie）
+        if n.icon == "floor" { return AnyView(FourSquareLogo(size: size * 0.66, color: n.active ? Self.sideActiveText : Self.sideText).frame(width: size, height: size)) }
         if let own = n.symbol { return AnyView(Image(systemName: own).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)) }
         switch n.icon {
         case "home": sym = "house"
