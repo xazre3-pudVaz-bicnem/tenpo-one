@@ -390,7 +390,7 @@ struct NativeHomeView: View {
                 }
             }
         }
-        .buttonStyle(PressableStyle(scale: 0.97))
+        .buttonStyle(LiveTapStyle(scale: 0.94))
         .disabled(model.busy && n.key == "#drawer")
     }
 
@@ -414,7 +414,7 @@ struct NativeHomeView: View {
                     .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Self.cardLine, lineWidth: 1))
                 }
-                .buttonStyle(PressableStyle(scale: 0.98))
+                .buttonStyle(LiveTapStyle(scale: 0.97))
             }
         }
         .frame(maxHeight: .infinity)
