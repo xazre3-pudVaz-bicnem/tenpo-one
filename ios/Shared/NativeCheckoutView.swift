@@ -18,9 +18,10 @@ struct NativeCheckoutView: View {
     @State private var activeId: UUID?
     /// 「ちょうど」を押したか（押す前は他のボタンと同じ色。押して残りが 0 のときだけ緑。2026-10-24 23:08 Ronnie「押した時だけ色を。間違える」）
     @State private var exactOn = false
-    /// 支払方法を選ばずに数字・ちょうどを押した（勝手に現金にしない。現金も押した時だけ緑。2026-10-24 23:08 Ronnie）
+    /// 支払方法の入力案内。
     @State private var needMethodHint = false
     @State private var openMethod: NPPayMethod?
+    @State private var methodOptions: NPPayMethod?
     @State private var memo = ""
     @State private var done = false
     /// 完了画面の「領収書」（宛名・但し書き。伝票明細と同じ画面。2026-10-25 00:08 Ronnie）
@@ -57,6 +58,8 @@ struct NativeCheckoutView: View {
     private var tenderedTotal: Int { nonCashPaid + (cashRow?.tendered ?? 0) }
     private var remaining: Int { max(0, total - nonCashPaid - cashApplied) }
     private var change: Int { max(0, (cashRow?.tendered ?? 0) - cashDue) }
+    /// 他の支払方法で精算済みの分を除き、次の千円単位のお預り候補を表示する。
+    private var roundedTenderAmount: Int { ((cashDue + 999) / 1000) * 1000 }
     /// 最新の金額を読み終わったか（保存してあった中身を先に出しているあいだは確定しない）
     private var fresh: Bool { !model.isLive || model.orderLoaded }
     private var canPay: Bool { fresh && !needsSource && (total == 0 || (remaining == 0 && !payments.isEmpty)) }
@@ -64,17 +67,51 @@ struct NativeCheckoutView: View {
     private var needsSource: Bool { model.isLive && model.order.sourceRequired && model.order.visitSourceId == nil }
 
     var body: some View {
+        // 親画面上のオーバーレイを全面に広げ、Web の印刷接続は維持する。
+        checkoutContent
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .background(NT.page.ignoresSafeArea())
+    }
+
+    private var checkoutContent: some View {
         VStack(spacing: 0) {
             header
             if done {
                 doneView
             } else {
                 GeometryReader { geo in
-                    HStack(alignment: .top, spacing: 12) {
-                        itemsColumn.frame(width: max(300, geo.size.width * 0.28))
-                        amountColumn.frame(width: max(300, geo.size.width * 0.30))
-                        rightColumn
+                    let width = max(0, geo.size.width - 24)
+                    let height = max(0, geo.size.height - 24)
+                    Group {
+                        if width >= 1000 {
+                            HStack(alignment: .top, spacing: 12) {
+                                itemsColumn.frame(width: (width - 24) * 0.27)
+                                amountColumn.frame(width: (width - 24) * 0.29)
+                                rightColumn
+                            }
+                        } else if width >= 680 {
+                            HStack(spacing: 12) {
+                                VStack(spacing: 12) {
+                                    itemsColumn.frame(height: height * 0.38)
+                                    amountColumn
+                                }
+                                .frame(width: (width - 12) * 0.46)
+                                rightColumn
+                            }
+                        } else {
+                            VStack(spacing: 12) {
+                                ScrollView {
+                                    VStack(spacing: 12) {
+                                        itemsColumn.frame(height: 220)
+                                        amountColumn.frame(height: 360)
+                                    }
+                                }
+                                .frame(height: min(180, height * 0.3))
+                                rightColumn
+                            }
+                        }
                     }
+                    .frame(width: width, height: height)
                     .padding(12)
                 }
             }
@@ -151,6 +188,7 @@ struct NativeCheckoutView: View {
             Text(model.order.tableName).font(.system(size: 22, weight: NT.strong)).foregroundColor(OV.yellow)
             Text(verbatim: model.order.noLabel).font(.system(size: 16, weight: .semibold)).foregroundColor(.white.opacity(0.6))
         }
+        .lineLimit(1).minimumScaleFactor(0.7)
         .padding(.horizontal, 20).frame(height: 64)
         .background(NT.topBar)
     }
@@ -361,16 +399,36 @@ struct NativeCheckoutView: View {
 
     private var rightColumn: some View {
         VStack(spacing: 10) {
+            ScrollView {
+                VStack(spacing: 10) {
             // 支払 / 値引
             HStack(spacing: 0) {
-                tabButton("支払", "支払", .pay)
-                tabButton("値引", "値引", .discount)
+                tabButton("支払", "Payment", .pay)
+                tabButton("値引き", "Discount", .discount)
             }
             .background(RoundedRectangle(cornerRadius: 12).fill(NT.lilac))
 
             if tab == .pay { payPanel } else { discountPanel }
 
-            Spacer(minLength: 0)
+                }
+                .frame(maxWidth: .infinity)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .overlay { if let method = methodOptions { paymentOptionsPopup(method) } }
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            checkoutActions
+                .disabled(methodOptions != nil)
+                .fixedSize(horizontal: false, vertical: true)
+                .layoutPriority(1)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .top)
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
+        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
+    }
+
+    private var checkoutActions: some View {
+        VStack(spacing: 10) {
             if showSteraButton, let m = openMethod {
                 Button { steraPick = true } label: {
                     HStack(spacing: 8) {
@@ -398,7 +456,7 @@ struct NativeCheckoutView: View {
                 Text(paying ? "処理中…" : !fresh ? "最新の金額を確認中…" : needsSource ? "来店経路を選択してください" : canPay ? "会計完了" : "残額 \(NT.yen(remaining)) の支払方法を選択")
                     .font(.system(size: 22, weight: NT.strong)).foregroundColor(.white)
                     .lineLimit(1).minimumScaleFactor(0.6)
-                    .frame(maxWidth: .infinity, minHeight: 68)
+                    .frame(maxWidth: .infinity, minHeight: 88)
                     // 「お会計を確定」はレジ会計の緑（2026-10-24 21:36・21:42 Ronnie）
                     .background(RoundedRectangle(cornerRadius: 16).fill(canPay ? NT.pay : NT.pay.opacity(0.35)))
             }
@@ -407,10 +465,6 @@ struct NativeCheckoutView: View {
             // いつも見せる（上のテンキーのほうを縮める）
             .layoutPriority(1)
         }
-        .frame(maxHeight: .infinity, alignment: .top)
-        .padding(12)
-        .background(RoundedRectangle(cornerRadius: 16, style: .continuous).fill(NT.card))
-        .overlay(RoundedRectangle(cornerRadius: 16, style: .continuous).stroke(NT.lilacLine, lineWidth: 1))
     }
 
     private func tabButton(_ title: String, _ en: String, _ t: Tab) -> some View {
@@ -427,7 +481,7 @@ struct NativeCheckoutView: View {
     private var payPanel: some View {
         VStack(spacing: 10) {
             // オフラインは現金だけ（カード・QR・ポイントはネットが戻ってから。2026-10-24 Ronnie）
-            let methods: [NPPayMethod] = model.offline ? [.cash] : [.cash, .credit, .qr, .emoney, .external, .other, .sitePoints, .points]
+            let methods: [NPPayMethod] = model.offline ? [.cash] : [.cash, .credit, .qr, .emoney, .external, .other, .points]
             if model.offline {
                 Text("オフラインです：現金の会計だけできます（レシートはこの iPad から。ネットが戻ると自動で送ります）")
                     .font(.system(size: 15, weight: .bold)).foregroundColor(Color(hex: 0xC62828))
@@ -474,31 +528,11 @@ struct NativeCheckoutView: View {
                 .padding(10).background(RoundedRectangle(cornerRadius: 10).fill(Color(hex: 0xFDECEC)))
                 .transition(.opacity)
             }
-            // 内訳（クレジット→VISA…、QR→PayPay…、サイトポイント→ホットペッパー…）。各社の色で
-            if let m = openMethod, m != .external, !brands(m).isEmpty {
-                VStack(alignment: .leading, spacing: 6) {
-                    Text(m == .sitePoints ? "どのサイトのポイント？ / Which site" : "\(m.label)の種類 / \(m.english) type")
-                        .font(.system(size: 12, weight: .bold)).foregroundColor(NT.ink3)
-                    // 各社の名前を白いカードに並べる（ロゴのように。店が設定で選んだものだけ。2026-10-24 22:35 Ronnie）
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 4), spacing: 8) {
-                        ForEach(brands(m)) { b in
-                            let on = payments.contains { $0.method == m && $0.brand == b }
-                            Button { addRow(m, brand: b) } label: { NPBrandTile(brand: b, fallback: m.color, on: on, height: 50) }
-                                .buttonStyle(PressableStyle())
-                        }
-                    }
-                }
-                .padding(10)
-                .background(RoundedRectangle(cornerRadius: 12).stroke(NT.lilacLine, lineWidth: 1))
-            }
-            // 外部端末：つないである端末（stera など）を出す。無ければ追加へ（2026-10-24 Ronnie）
-            if openMethod == .external { externalPanel }
-
             keypad(onKey: keyForPayment, quick: [
-                ("ちょうど", "Exact", { setActive(exact: true) }),
-                ("¥1,000", nil, { bump(1000) }),
-                ("¥5,000", nil, { bump(5000) }),
+                (NT.yen(roundedTenderAmount), nil, { setRoundedTender() }),
                 ("¥10,000", nil, { bump(10000) }),
+                ("C", nil, { keyForPayment("C") }),
+                ("残額（\(NT.yen(remaining))）", nil, { setActive(exact: true) }),
             ])
         }
     }
@@ -563,26 +597,24 @@ struct NativeCheckoutView: View {
 
     private func keypad(onKey: @escaping (String) -> Void, quick: [(String, String?, () -> Void)]) -> some View {
         VStack(spacing: 8) {
-            HStack(spacing: 8) {
-                // 大きめのボタン・大きめの字、「ちょうど」は緑（2026-10-24 Ronnie「alli thulo、exact lai green」）
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 2), spacing: 8) {
                 ForEach(Array(quick.enumerated()), id: \.offset) { _, q in
-                    let exact = q.1 == "Exact" && exactOn && remaining == 0 && !payments.isEmpty
+                    let exact = q.0.hasPrefix("残額") && exactOn && remaining == 0 && !payments.isEmpty
                     Button(action: q.2) {
                         VStack(spacing: 1) {
                             Text(q.0).font(.system(size: 22, weight: NT.strong))
                             if let en = q.1 { Text(en).font(.system(size: 14, weight: .bold)).opacity(0.8) }
                         }
-                        .foregroundColor(exact ? .white : NT.purple)
+                        .foregroundColor(q.0 == "C" ? .red : exact ? .white : NT.purple)
                         .lineLimit(1).minimumScaleFactor(0.7)
-                        // 狭いときは低くして、下の「お会計を確定」をいつも見せる（2026-10-25 20:21 Ronnie「credit ma click garepaxi … 会計 button lukxa」）
-                        .frame(maxWidth: .infinity, minHeight: 46, maxHeight: 64)
+                        // 金額ショートカットは押しやすい高さを保ち、確定ボタンはスクロール領域の外に固定。
+                        .frame(maxWidth: .infinity).frame(height: 56)
                         .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(exact ? NT.purple : NT.lilac))
                     }
                     .buttonStyle(PressableStyle())
                 }
             }
-            // テンキーは高さが縮む（54 → 最小 38pt）。クレジットの種類などが出て狭くなっても、
-            // 下の「お会計を確定」ボタンが画面の外に押し出されない（2026-10-25 20:21 Ronnie「会計 button lukxa … 問題です」）
+            // 大きなキーは縮めず、必要なときは支払パネル内でスクロールする。確定ボタンは別枠に固定。
             let rows = [["7", "8", "9"], ["4", "5", "6"], ["1", "2", "3"], ["00", "0", "⌫"]]
             VStack(spacing: 8) {
                 ForEach(rows, id: \.self) { row in
@@ -745,11 +777,13 @@ struct NativeCheckoutView: View {
             methodOptions = m
             return
         }
+        methodOptions = nil
         openMethod = nil
         addRow(m, brand: nil)
     }
 
     private func addRow(_ m: NPPayMethod, brand: NPBrand?) {
+        methodOptions = nil
         if let existing = payments.first(where: { $0.method == m && $0.brand == brand }) {
             activeId = existing.id
             return
@@ -769,9 +803,13 @@ struct NativeCheckoutView: View {
     @discardableResult
     private func updateActive(_ f: (inout NPPaymentRow) -> Void) -> Bool {
         if activeId == nil || !payments.contains(where: { $0.id == activeId }) {
-            // 何も選んでいなければ勝手に現金にしない（間違いのもと）。先に支払方法を押してもらう
-            showMethodHint()
-            return false
+            // 未選択時のテンキー・残額・お預り候補は現金に入力する。
+            if payments.isEmpty {
+                addRow(.cash, brand: nil)
+                openMethod = nil
+            } else {
+                activeId = payments.last?.id
+            }
         }
         guard let i = payments.firstIndex(where: { $0.id == activeId }) else { return false }
         f(&payments[i])
@@ -789,7 +827,9 @@ struct NativeCheckoutView: View {
         updateActive { row in
             var digits = String(row.method == .cash ? row.tendered : row.amount)
             if digits == "0" { digits = "" }
-            if k == "⌫" { digits = String(digits.dropLast()) } else if digits.count < 7 { digits += k }
+            if k == "C" { digits = "" }
+            else if k == "⌫" { digits = String(digits.dropLast()) }
+            else if digits.count < 7 { digits += k }
             let v = Int(digits) ?? 0
             if row.method == .cash { row.tendered = v } else { row.amount = v }
         }
@@ -807,6 +847,14 @@ struct NativeCheckoutView: View {
         exactOn = false
         updateActive { row in
             if row.method == .cash { row.tendered += yen } else { row.amount += yen }
+        }
+    }
+
+    private func setRoundedTender() {
+        exactOn = false
+        let amount = roundedTenderAmount
+        updateActive { row in
+            if row.method == .cash { row.tendered = amount } else { row.amount = amount }
         }
     }
 
