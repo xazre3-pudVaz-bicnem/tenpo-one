@@ -40,6 +40,59 @@ enum NT {
     }
 }
 
+/// Customer setup and checkout share the same popup typography and controls.
+enum NTPopupStyle {
+    static let title = Font.system(size: 24, weight: .bold)
+    static let label = Font.system(size: 18, weight: .semibold)
+    static let subtitle = Font.system(size: 13, weight: .regular)
+    static let keypad = Font.system(size: 28, weight: .semibold)
+    static let action = Font.system(size: 22, weight: .bold)
+    static let keyHeight: CGFloat = 68
+    static let cardRadius: CGFloat = 16
+    static let controlRadius: CGFloat = 12
+    static let popupRadius: CGFloat = 20
+}
+
+struct NTPopupLabel: View {
+    let title: String
+    let subtitle: String
+    var titleFont: Font = NTPopupStyle.label
+    var alignment: HorizontalAlignment = .leading
+
+    var body: some View {
+        VStack(alignment: alignment, spacing: 2) {
+            Text(title).font(titleFont)
+            if !subtitle.isEmpty {
+                Text(subtitle).font(NTPopupStyle.subtitle).opacity(0.7)
+            }
+        }
+        .lineLimit(1).minimumScaleFactor(0.9)
+    }
+}
+
+/// One header for both customer setup and checkout option popups.
+struct NTPopupHeader: View {
+    let title: String
+    let subtitle: String
+    let onClose: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            NTPopupLabel(title: title, subtitle: subtitle, titleFont: NTPopupStyle.title)
+                .foregroundColor(NT.ink)
+            Spacer(minLength: 8)
+            Button(action: onClose) {
+                Image(systemName: "xmark").font(.system(size: 20, weight: .bold))
+                    .foregroundColor(NT.ink2).frame(width: 44, height: 44)
+                    .background(NT.page, in: RoundedRectangle(cornerRadius: NTPopupStyle.controlRadius))
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel("閉じる")
+        }
+        .frame(minHeight: 52)
+    }
+}
+
 extension Color {
     init(hex: UInt32, alpha: Double = 1) {
         self.init(
