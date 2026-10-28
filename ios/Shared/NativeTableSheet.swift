@@ -46,6 +46,9 @@ struct NativeTableSheet: View {
     /// 移動先＝空席（伝票が無くて空いている卓。オーダー画面の「卓を移動」と同じ）
     private var moveCandidates: [NFTable] { model.tables.filter { $0.id != table.id && $0.order == nil && $0.currentStatus == "available" } }
 
+    /// 空席の来店登録は大きなポップアップ（2026-10-28 Ronnie の iPad の写真）
+    private var wideEmpty: Bool { !seated && state != .cleaning && state != .unavailable }
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             // 外を押したときだけ閉じる（iPad のポップオーバーと同じく、外は少しだけ暗く）
@@ -55,7 +58,7 @@ struct NativeTableSheet: View {
             // 高さは Layout で測る（preference で測る方式は実機で 0 のままになり潰れた）
             // どの卓を押しても画面の真ん中に出す（上下左右の真ん中。2026-10-24 Ronnie）→ 矢印は出さない
             // 上の端はいつも同じ高さ（中身の高さで出る場所が変わらないように。2026-10-24 21:44 Ronnie「いつも同じ場所に」）
-            NFPopoverLayout(width: Self.width, maxHeight: 760, anchor: nil, fixedTop: 64) {
+            NFPopoverLayout(width: wideEmpty ? min(860, UIScreen.main.bounds.width - 60) : Self.width, maxHeight: wideEmpty ? 900 : 760, anchor: nil, fixedTop: 64) {
                 popup
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12)
                 NFPopoverArrow().fill(Self.sheetBg).frame(width: 26, height: 12).rotationEffect(.degrees(180))
@@ -101,6 +104,7 @@ struct NativeTableSheet: View {
             VStack(alignment: .leading, spacing: 10) {
                 // 1 行に：卓番・人数の札・（あいだに）時間とプラン・変更の鉛筆・閉じる
                 // （2026-10-27 18:59 Ronnie「T番 tesko right tira 人 manxe ko clip ani tesko side ma 変更 pen、ini haru ko bich ma details」）
+                if !wideEmpty {
                 HStack(alignment: .center, spacing: 10) {
                     Text(table.name)
                         .font(.system(size: 20, weight: .bold)).foregroundColor(Self.ink)
@@ -145,6 +149,7 @@ struct NativeTableSheet: View {
                     .buttonStyle(.plain)
                 }
                 .padding(.bottom, 4)
+                }
 
                 if !table.calls.isEmpty { callsBox }
 
@@ -217,18 +222,18 @@ struct NativeTableSheet: View {
     @ViewBuilder private var emptyBody: some View {
         NativeSetupSheet(model: model, table: table, embedded: true, onClose: onClose, onStarted: { id in
             onClose(); onOpenOrder(id, false)
-        })
+        }, onCreated: { onClose() }, leftFooter: AnyView(
+            HStack(spacing: 8) {
+                secondaryButton(icon: "square.grid.2x2", "テーブルグループ設定", en: "Table group", on: groupOpen, enabled: canOperate) {
+                    groupPick = table.groupTableIds.isEmpty ? [table.id] : table.groupTableIds
+                    groupOpen.toggle()
+                }
+                secondaryButton(icon: "lock", "テーブルブロック", en: "Block", enabled: canOperate) {
+                    Task { await model.act(["type": "floorBlock", "tableId": table.id, "unavailable": true]); onClose() }
+                }
+            }
+        ))
         .zIndex(1)
-        divider
-        HStack(spacing: 8) {
-            secondaryButton(icon: "lock", "テーブルブロック", en: "Block", enabled: canOperate) {
-                Task { await model.act(["type": "floorBlock", "tableId": table.id, "unavailable": true]); onClose() }
-            }
-            secondaryButton(icon: nil, "テーブルグループ設定", en: "Table group", on: groupOpen, enabled: canOperate) {
-                groupPick = table.groupTableIds.isEmpty ? [table.id] : table.groupTableIds
-                groupOpen.toggle()
-            }
-        }
     }
 
     // 着席中
@@ -252,7 +257,7 @@ struct NativeTableSheet: View {
             // レジ会計は緑（2026-10-24 Ronnie「緑はレジ会計、会計伝票は黒」）
             // 注文＝紫紺、レジ会計・会計伝票＝白い箱（黒・緑にしない。2026-10-27 02:48 Ronnie「会計伝票 black ma pani pardaina」）
             // 「レジ会計」→「会計」（2026-10-27 19:39 Ronnie「レジ会計 lai 会計 matra banau」）
-            bigButton("会計", en: "Checkout", icon: "yensign.circle", fill: .white, textColor: Self.ink, border: Self.line, height: 116, size: 22, enabled: selected != nil) {
+            bigButton("会計", en: "Checkout", icon: "yensign.circle", fill: Color(hex: 0xFFF8E6), textColor: Self.ink, border: Color(hex: 0xEFE3BE), height: 116, size: 22, enabled: selected != nil) {
                 if let s = selected { onClose(); onOpenOrder(s.id, true) }
             }
         }

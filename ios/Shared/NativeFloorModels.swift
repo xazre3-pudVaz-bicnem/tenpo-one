@@ -271,6 +271,7 @@ enum NFColor {
     static let lilac = Color(hex: 0xF1F3F8)
     static let lilacSoft = Color(hex: 0xF8F9FC)
     static let line = Color(hex: 0xE3E7EE)
+    static let fieldBg = Color(hex: 0xF4F5F7)
     static let ink = Color(hex: 0x292725)
     static let ink2 = Color(hex: 0x5C5650)
     static let ink3 = Color(hex: 0x766B62)
