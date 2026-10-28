@@ -148,6 +148,7 @@ struct NativeHomeView: View {
     var onFloor: () -> Void = {}
     /// ハンディQR をネイティブで大きく出す（2026-10-24）
     @State private var handyQrOpen = false
+    @ObservedObject private var app = AppState.shared
     // テーブルのお客様QR（印刷・再発行）は 設定 の中から（2026-10-24 19:01 Ronnie。前はホームの上のボタン）
 
     private static let blue = Color(hex: 0x1A5AD6)
@@ -176,7 +177,7 @@ struct NativeHomeView: View {
     private var tools: [NHTool] { model.payload?.tools ?? [] }
     /// 大きい2つの名前（2026-10-29 04:13 Ronnie）：注文・会計 ／ テーブル管理、ご予約管理 ／ テーブルリンク（大きい字が名前、小さい字が下の言葉）
     private var bigTiles: [NHNamed] {
-        [NHNamed(href: "/app/floor", label: "注文・会計", en: "テーブル管理"), NHNamed(href: "/app/reservations", label: "ご予約管理", en: "テーブルリンク")]
+        [NHNamed(href: "/app/floor", label: "注文・会計", en: "TABLE ONE"), NHNamed(href: "/app/reservations", label: "ご予約管理", en: "TABLE LINK")]
     }
 
     var body: some View {
@@ -269,6 +270,18 @@ struct NativeHomeView: View {
                 // お知らせのベルは出さない。お知らせ（仕入・経費）は「仕入・経費」の箱の赤い数字で（無いときは何も出ない）
                 // （2026-10-27 02:34 Ronnie「top ma vayeko ring bell 仕入・経費 ko vayeko hunale notify aauda tei button ma dekhine banau」）
                 // 店名はログアウトの横（2026-10-24 19:03 Ronnie）。ハンディQR は右の箱へ（2026-10-27 の見本）
+                // 右上は「ハンディQR　店名　レジ担当」の順（2026-10-29 05:25 Ronnie）
+                Button { handyQrOpen = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "qrcode")
+                        Text("ハンディQR").lineLimit(1)
+                    }
+                    .font(.system(size: 15, weight: .semibold)).foregroundColor(Self.tileText)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(Color.white))
+                    .overlay(Capsule().stroke(Self.tileLine, lineWidth: 1))
+                }
+                .buttonStyle(LiveTapStyle(scale: 0.96))
                 HStack(spacing: 6) {
                     Image(systemName: "storefront")
                     Text(model.payload?.store.name ?? "").lineLimit(1)
@@ -277,6 +290,16 @@ struct NativeHomeView: View {
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(Capsule().fill(Color.white))
                 .overlay(Capsule().stroke(Self.tileLine, lineWidth: 1))
+                if let clerk = app.regiClerk {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.crop.circle")
+                        Text("担当 \(clerk.name)").lineLimit(1)
+                    }
+                    .font(.system(size: 15, weight: .semibold)).foregroundColor(Self.tileText)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(Color.white))
+                    .overlay(Capsule().stroke(Self.tileLine, lineWidth: 1))
+                }
             }
             .padding(.horizontal, 20)
             .frame(height: 52)
@@ -350,7 +373,6 @@ struct NativeHomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 4) {
                     ForEach(Array(sidebarItems.enumerated()), id: \.element.key) { i, n in
-                        if i == Self.sideTools.count { Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 4) }
                         navCompact(n)
                     }
                 }
@@ -366,17 +388,16 @@ struct NativeHomeView: View {
 
     /// 左のメニューの全部：ホーム・注文・会計・店舗台帳・即会計・入出金・ドロア ＋ 伝票明細・ハンディQR・レジクローズ・仕入・経費・店舗分析・予算登録
     private var sidebarItems: [NavItem] {
-        // 注文・会計 と 店舗台帳 は大きい箱が本体にあるので、左のメニューには入れない（2026-10-29 01:24 Ronnie「Menu bar ma kina chaiyo ra」）
-        let bigKeys = Set(bigTiles.map { $0.href })
-        var out = navItems.filter { !bigKeys.contains($0.key) }
-        // 入出金 は線の下、伝票明細の上（2026-10-29 02:54 Ronnie「入出金 ko mathi hala」）
-        if let i = out.firstIndex(where: { $0.key == "/app/cash" }) { let c = out.remove(at: i); out.append(c) }
-        // ハンディQR はメニューのいちばん最後（2026-10-29 01:56 Ronnie）
-        let ordered = gridTiles.filter { $0.key != "#handyqr" } + gridTiles.filter { $0.key == "#handyqr" }
-        for g in ordered {
-            out.append(NavItem(key: "g" + g.key, icon: g.key, label: g.label, en: g.en, badge: g.badge, symbol: g.icon, action: g.action))
+        // 2026-10-29 05:25 Ronnie の並び：ホーム／即会計／伝票明細（Payment history）／入出金／仕入・経費／…／レジクローズ（いちばん最後）。
+        // ハンディQR は上のバーへ。大きい2つの箱は本体にあるのでメニューに入れない。
+        // 書いてなかったもの（ドロア・店舗分析・予算登録）は消さず、レジクローズの前に置く
+        var all: [String: NavItem] = [:]
+        for n in navItems { all[n.key] = n }
+        for g in gridTiles {
+            all["g" + g.key] = NavItem(key: "g" + g.key, icon: g.key, label: g.label, en: g.en, badge: g.badge, symbol: g.icon, action: g.action)
         }
-        return out
+        let order = ["home", "/app/quick-pay", "g/app/orders", "/app/cash", "g/app/expenses", "#drawer", "g#analytics", "g#budget", "g/app/cash/close"]
+        return order.compactMap { all[$0] }
     }
 
     private func navCompact(_ n: NavItem) -> some View {
@@ -442,27 +463,35 @@ struct NativeHomeView: View {
         return card {
             HStack(alignment: .center, spacing: 28) {
                 VStack(alignment: .leading, spacing: 8) {
-                    // 英語は日本語の下（2026-10-29 01:58 Ronnie「日本語ko tala english lekha」）
-                    VStack(alignment: .leading, spacing: 0) {
-                        Text("実績売上高").font(.system(size: 15, weight: .regular))
-                        Text("Sales").font(.system(size: 12))
-                    }
-                    .foregroundColor(Self.inkSub)
-                    Text(NT.yen(s?.actual ?? 0)).font(.system(size: 46, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
-                        .lineLimit(1).minimumScaleFactor(0.6)
-                    HStack(alignment: .top, spacing: 32) {
-                        VStack(alignment: .leading, spacing: 2) {
+                    // 上の行は「実績売上高　客単価」、その下に「予算売上高」（字はそのまま、置き場所だけ。2026-10-29 05:25 Ronnie）
+                    HStack(alignment: .top, spacing: 44) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            // 英語は日本語の下（2026-10-29 01:58 Ronnie「日本語ko tala english lekha」）
                             VStack(alignment: .leading, spacing: 0) {
-                                Text("予算売上高").font(.system(size: 13, weight: .regular))
-                                Text("Target").font(.system(size: 11))
+                                Text("実績売上高").font(.system(size: 15, weight: .regular))
+                                Text("Sales").font(.system(size: 12))
                             }
                             .foregroundColor(Self.inkSub)
-                            Text(s?.budget.map { NT.yen($0) } ?? "—").font(.system(size: 20, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                            Text(NT.yen(s?.actual ?? 0)).font(.system(size: 46, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                                .lineLimit(1).minimumScaleFactor(0.6)
                         }
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text("客単価").font(.system(size: 13, weight: .regular)).foregroundColor(Self.inkSub)
-                            Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 20, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                        VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("客単価").font(.system(size: 15, weight: .regular))
+                                Text(" ").font(.system(size: 12))
+                            }
+                            .foregroundColor(Self.inkSub)
+                            Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 46, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                                .lineLimit(1).minimumScaleFactor(0.6)
                         }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("予算売上高").font(.system(size: 13, weight: .regular))
+                            Text("Target").font(.system(size: 11))
+                        }
+                        .foregroundColor(Self.inkSub)
+                        Text(s?.budget.map { NT.yen($0) } ?? "—").font(.system(size: 20, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
                     }
                     HStack(spacing: 4) {
                         Image(systemName: "arrow.clockwise").font(.system(size: 10))
