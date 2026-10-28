@@ -195,7 +195,7 @@ struct NativeSetupSheet: View {
     // MARK: 空席の来店登録（画面の真ん中の大きなポップアップ。2026-10-28 Ronnie の iPad の写真と同じ並び）
     //   上：モード・プラン　左：タイマー設定（時間制・終了前注意・開始時刻・L.O.）　右：人数のテンキー＋テーブル作成・注文開始
 
-    private var wide: Bool { embedded && edit == nil }
+    private var wide: Bool { embedded }
 
     private var wideLayout: some View {
         VStack(alignment: .leading, spacing: 14) {
@@ -215,9 +215,16 @@ struct NativeSetupSheet: View {
                 .buttonStyle(PressableStyle())
             }
             card {
-                wideLabelRow("モード", en: "Mode") { chooseField(planNames) { popup = .mode } }
+                // どちらも同じ一覧（4 つ分の高さ・あとはスクロール・何個でも選べる。2026-10-28 18:56 Ronnie「Drop down scroll、same as plan」）
+                wideLabelRow("モード", en: "Mode") {
+                    NFMultiDropField(text: planNames, items: (payload?.plans ?? []).map { ($0.id, $0.name) }, selected: plans, emptyText: "モードがありません") { togglePlan($0) }
+                }
                 rowDivider
-                wideLabelRow("プラン", en: "Plan") { chooseField(pickedPlanNames.isEmpty ? "未設定" : pickedPlanNames) { popup = .plan } }
+                wideLabelRow("プラン", en: "Plan") {
+                    NFMultiDropField(text: pickedPlanNames.isEmpty ? "未設定" : pickedPlanNames,
+                                     items: planItems.map { ($0.id, slipMenuItemIds.contains($0.id) ? "\($0.name)（伝票にあり）" : "\($0.name)  ¥\($0.price)") },
+                                     selected: planItemIds + slipMenuItemIds, emptyText: "このモードのプランはありません") { togglePlanItem($0) }
+                }
             }
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -239,15 +246,14 @@ struct NativeSetupSheet: View {
     @ViewBuilder private var timerRows: some View {
         wideLabelRow("時間制", en: "Time limit", grow: true) {
             checkBox($timed, enabled: true)
-            dropField("\(duration / 60)", value: Binding(get: { duration / 60 }, set: { duration = max(15, $0 * 60 + duration % 60) }), options: Array(0...10), show: { "\($0)" }, enabled: timed)
-            unitText("時間")
-            dropField(String(format: "%02d", (duration % 60 / 5) * 5), value: Binding(get: { duration % 60 / 5 * 5 }, set: { duration = max(15, (duration / 60) * 60 + $0) }), options: Array(stride(from: 0, to: 60, by: 5)), show: { String(format: "%02d", $0) }, enabled: timed)
-            unitText("分")
+            dropField("\(duration / 60)", value: Binding(get: { duration / 60 }, set: { duration = max(15, $0 * 60 + duration % 60) }), options: Array(0...10), show: { "\($0)時間" }, enabled: timed)
+            colonText
+            dropField(String(format: "%02d", (duration % 60 / 5) * 5), value: Binding(get: { duration % 60 / 5 * 5 }, set: { duration = max(15, (duration / 60) * 60 + $0) }), options: Array(stride(from: 0, to: 60, by: 5)), show: { String(format: "%02d分", $0) }, enabled: timed)
         }
         rowDivider
         wideLabelRow("終了前注意", en: "Last call", grow: true) {
             checkBox($warningEnabled, enabled: timed)
-            dropField("\(warningMinutes)分前", value: $warningMinutes, options: Array(Set([5, 10, 15, 20, 30, 45, 60, 90, warningMinutes])).sorted(), show: { "\($0)分前" }, enabled: timed && warningEnabled)
+            dropField("\(warningMinutes)分前", value: $warningMinutes, options: [15, 30, 45, 60], show: { "\($0)分前" }, enabled: timed && warningEnabled)
         }
         rowDivider
         wideLabelRow("開始時刻", en: "Start time", grow: true) {
@@ -261,10 +267,9 @@ struct NativeSetupSheet: View {
             let cal = nfJstCalendar
             let h = cal.component(.hour, from: effectiveStart)
             let m = cal.component(.minute, from: effectiveStart)
-            dropField(String(format: "%02d", h), value: Binding(get: { h }, set: { startNow = false; setStart(hour: $0, minute: m) }), options: Array(0..<24), show: { String(format: "%02d", $0) }, enabled: true)
-            unitText("時")
-            dropField(String(format: "%02d", m), value: Binding(get: { m }, set: { startNow = false; setStart(hour: h, minute: $0) }), options: Array(0..<60), show: { String(format: "%02d", $0) }, enabled: true)
-            unitText("分")
+            dropField(String(format: "%02d", h), value: Binding(get: { h }, set: { startNow = false; setStart(hour: $0, minute: m) }), options: Array(0..<24), show: { String(format: "%02d時", $0) }, enabled: true)
+            colonText
+            dropField(String(format: "%02d", m), value: Binding(get: { m }, set: { startNow = false; setStart(hour: h, minute: $0) }), options: Array(0..<60), show: { String(format: "%02d分", $0) }, enabled: true)
         }
         rowDivider
         wideLabelRow("L.O.", en: "Last order", grow: true) {
@@ -302,6 +307,7 @@ struct NativeSetupSheet: View {
                 }
             }
             VStack(spacing: 8) {
+                if edit == nil {
                 Button { Task { await confirm(openOrder: false) } } label: {
                     VStack(spacing: 0) {
                         Text("テーブル作成").font(.system(size: 18, weight: .medium))
@@ -314,10 +320,11 @@ struct NativeSetupSheet: View {
                 }
                 .buttonStyle(PressableStyle(scale: 0.98))
                 .disabled(!canConfirm).opacity(canConfirm ? 1 : 0.5)
+                }
                 Button { Task { await confirm() } } label: {
                     VStack(spacing: 2) {
-                        Text(saving ? "作成中…" : "注文開始").font(.system(size: 22, weight: NT.strong))
-                        Text("Start order").font(.system(size: 12)).opacity(0.8)
+                        Text(saving ? (edit == nil ? "作成中…" : "保存中…") : (edit == nil ? "注文開始" : "保存する")).font(.system(size: 22, weight: NT.strong))
+                        Text(edit == nil ? "Start order" : "Save").font(.system(size: 12)).opacity(0.8)
                     }
                     .foregroundColor(.white)
                     .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -361,21 +368,13 @@ struct NativeSetupSheet: View {
         .buttonStyle(PressableStyle(scale: 0.99))
     }
 
-    /// 時・分・分前の選び（▾ を押すとその場で選ぶ）
+    /// 時・分・分前の選び（▾ を押すと 4 つ分の高さの一覧が出て、残りはスクロール。2026-10-28 18:35 Ronnie「4 ota samma option、aru scroll」）
     private func dropField<T: Hashable>(_ text: String, value: Binding<T>, options: [T], show: @escaping (T) -> String, enabled: Bool) -> some View {
-        Menu {
-            Picker("", selection: value) { ForEach(options, id: \.self) { Text(show($0)).tag($0) } }
-        } label: {
-            HStack(spacing: 4) {
-                Text(text).font(.system(size: 18, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
-                Spacer(minLength: 2)
-                Image(systemName: "chevron.down").font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
-            }
-            .padding(.horizontal, 10).frame(height: 42)
-            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
-        }
-        .disabled(!enabled)
-        .opacity(enabled ? 1 : 0.4)
+        NFDropField(text: text, value: value, options: options, show: show, enabled: enabled)
+    }
+
+    private var colonText: some View {
+        Text(":").font(.system(size: 22, weight: .regular)).foregroundColor(NFColor.ink3)
     }
 
     private func unitText(_ t: String) -> some View {
@@ -640,6 +639,15 @@ struct NativeSetupSheet: View {
         .frame(width: 500)
         .background(NT.page, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 28, y: 12)
+    }
+
+    /// プランの商品を選ぶ・外す（伝票にもう入っているものは触らない。コースなら時間制もそれに）
+    private func togglePlanItem(_ id: String) {
+        guard !slipMenuItemIds.contains(id) else { return }
+        if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
+        if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
+            timed = true; duration = m
+        }
     }
 
     private func togglePlan(_ id: String) {
@@ -1424,3 +1432,115 @@ struct NFNumberPad: View {
 /// 顧客の検索結果（Web の PosCustomerSearchResult）
 struct NFCustomerHit: Codable, Identifiable, Hashable { let id: String; let name: String; let phone: String?; let pointBalance: Int }
 struct NFCustomerSearch: Codable { let results: [NFCustomerHit] }
+
+
+/// ドロップダウン：押すと小さな一覧（4 つ分の高さ・あとはスクロール）
+struct NFDropField<T: Hashable>: View {
+    let text: String
+    @Binding var value: T
+    let options: [T]
+    let show: (T) -> String
+    let enabled: Bool
+    @State private var open = false
+    private let rowH: CGFloat = 46
+
+    var body: some View {
+        Button { open = true } label: {
+            HStack(spacing: 4) {
+                Text(text).font(.system(size: 18, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.down").font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 10).frame(height: 42)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
+        }
+        .buttonStyle(PressableStyle(scale: 0.98))
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+        .popover(isPresented: $open) {
+            ScrollViewReader { proxy in
+                ScrollView(showsIndicators: true) {
+                    VStack(spacing: 0) {
+                        ForEach(options, id: \.self) { o in
+                            Button { value = o; open = false } label: {
+                                HStack {
+                                    Text(show(o)).font(.system(size: 20)).monospacedDigit().foregroundColor(NFColor.ink)
+                                    Spacer(minLength: 8)
+                                    if o == value { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundColor(GIColor.navy) }
+                                }
+                                .padding(.horizontal, 16).frame(height: rowH)
+                                .contentShape(Rectangle())
+                            }
+                            .buttonStyle(.plain)
+                            .id(o)
+                            Divider()
+                        }
+                    }
+                }
+                .frame(width: 150, height: rowH * CGFloat(min(4, options.count)))
+                .onAppear { proxy.scrollTo(value, anchor: .center) }
+            }
+            .nfPopoverAdapt()
+        }
+    }
+}
+
+extension View {
+    /// iPhone でも小さな一覧のまま出す（iOS 16.4 から。iPad は元から小さな一覧）
+    @ViewBuilder func nfPopoverAdapt() -> some View {
+        if #available(iOS 16.4, *) { self.presentationCompactAdaptation(.popover) } else { self }
+    }
+}
+
+
+/// 何個でも選べるドロップダウン（4 つ分の高さ・あとはスクロール）：モード・プラン
+struct NFMultiDropField: View {
+    let text: String
+    let items: [(id: String, label: String)]
+    let selected: [String]
+    let emptyText: String
+    let onToggle: (String) -> Void
+    @State private var open = false
+    private let rowH: CGFloat = 48
+
+    var body: some View {
+        Button { open = true } label: {
+            HStack {
+                Text(text).font(.system(size: 17)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down").font(.system(size: 13, weight: .medium)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 14).frame(height: 40)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
+        }
+        .buttonStyle(PressableStyle(scale: 0.99))
+        .popover(isPresented: $open) {
+            Group {
+                if items.isEmpty {
+                    Text(emptyText).font(.system(size: 16)).foregroundColor(NFColor.ink3)
+                        .padding(18).frame(width: 300)
+                } else {
+                    ScrollView(showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            ForEach(items, id: \.id) { it in
+                                Button { onToggle(it.id) } label: {
+                                    HStack {
+                                        Text(it.label).font(.system(size: 19)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                                        Spacer(minLength: 8)
+                                        if selected.contains(it.id) { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundColor(GIColor.navy) }
+                                    }
+                                    .padding(.horizontal, 16).frame(height: rowH)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                Divider()
+                            }
+                        }
+                    }
+                    .frame(width: 340, height: rowH * CGFloat(min(4, items.count)))
+                }
+            }
+            .nfPopoverAdapt()
+        }
+    }
+}
