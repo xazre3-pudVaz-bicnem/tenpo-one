@@ -322,6 +322,8 @@ struct NativeHomeView: View {
         let sym: String
         // 注文・会計 は箱と同じ、画面の中に 4 つの四角があるモニター（2026-10-29 01:14 Ronnie）
         if n.icon == "floor" { return AnyView(MonitorLogo(size: size * 0.8, color: n.active ? Self.sideActiveText : Self.sideText, line: 1.3).frame(width: size, height: size)) }
+        // 即会計 は昔ながらのレジの形（2026-10-29 01:43 Ronnie「Quick pay ko logo classic rezi ko hasto」）
+        if n.icon == "/app/quick-pay" { return AnyView(RegisterLogo(size: size * 0.9, color: n.active ? Self.sideActiveText : Self.sideText, line: 1.3).frame(width: size, height: size)) }
         if let own = n.symbol { return AnyView(Image(systemName: own).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)) }
         switch n.icon {
         case "home": sym = "house"
@@ -377,12 +379,12 @@ struct NativeHomeView: View {
         let sub = n.active ? Self.sideActiveText.opacity(0.7) : Self.sideSub
         return Button(action: n.action) {
             VStack(spacing: 2) {
-                navIcon(n, size: 22)
-                Text(n.label).font(.system(size: 11, weight: .regular)).lineLimit(1).minimumScaleFactor(0.6)
-                Text(n.en).font(.system(size: 8, weight: .regular)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.6)
+                navIcon(n, size: 26)
+                Text(n.label).font(.system(size: 12.5, weight: .regular)).lineLimit(1).minimumScaleFactor(0.6)
+                Text(n.en).font(.system(size: 9, weight: .regular)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.6)
             }
             .padding(.horizontal, 4)
-            .frame(maxWidth: .infinity).frame(height: 54)
+            .frame(maxWidth: .infinity).frame(height: 60)
             .foregroundColor(fg)
             .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(n.active ? Self.sideActive : Color.clear))
             .overlay(alignment: .topTrailing) {
@@ -810,5 +812,33 @@ struct MonitorLogo: View {
     }
     private func sq(_ s: CGFloat) -> some View {
         RoundedRectangle(cornerRadius: s * 0.2, style: .continuous).stroke(color, lineWidth: line).frame(width: s, height: s)
+    }
+}
+
+/// 昔ながらのレジ（上に小さい画面、ボタンの面、下にドロア）。線だけ。
+struct RegisterLogo: View {
+    var size: CGFloat
+    var color: Color
+    var line: CGFloat = 1.3
+    var body: some View {
+        let w = size, h = size
+        ZStack {
+            // 画面
+            RoundedRectangle(cornerRadius: w * 0.05, style: .continuous).stroke(color, lineWidth: line)
+                .frame(width: w * 0.46, height: h * 0.22).position(x: w * 0.5, y: h * 0.13)
+            // ボタンの面（少し傾いた台形でなく、角丸の箱）
+            RoundedRectangle(cornerRadius: w * 0.07, style: .continuous).stroke(color, lineWidth: line)
+                .frame(width: w * 0.88, height: h * 0.36).position(x: w * 0.5, y: h * 0.52)
+            // ボタン 3×2
+            ForEach(0..<6, id: \.self) { i in
+                Circle().fill(color).frame(width: w * 0.075, height: w * 0.075)
+                    .position(x: w * (0.30 + 0.20 * CGFloat(i % 3)), y: h * (0.45 + 0.14 * CGFloat(i / 3)))
+            }
+            // ドロア
+            RoundedRectangle(cornerRadius: w * 0.05, style: .continuous).stroke(color, lineWidth: line)
+                .frame(width: w * 0.96, height: h * 0.20).position(x: w * 0.5, y: h * 0.84)
+            Capsule().fill(color).frame(width: w * 0.22, height: line * 1.4).position(x: w * 0.5, y: h * 0.84)
+        }
+        .frame(width: w, height: h)
     }
 }
