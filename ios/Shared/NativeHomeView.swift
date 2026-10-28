@@ -554,10 +554,10 @@ struct NativeHomeView: View {
         // ハンディQR は今までの上のバーと同じ qrcode（紺）
         byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "qrcode", color: NFColor.navy, label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
         if s?.canAnalytics ?? false {
-            byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.bar", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
+            byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.line.uptrend.xyaxis", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
         }
         // 予算が未設定のときは右上に赤い丸の「!」（文字は書かない。2026-10-24 Ronnie）
-        byKey["#budget"] = GridTile(key: "#budget", icon: "chart.bar", label: "予算登録", en: "Set budget", alert: s != nil && s?.budget == nil, action: { onWeb("/app/budgets/daily") })
+        byKey["#budget"] = GridTile(key: "#budget", icon: "target", label: "予算登録", en: "Set budget", alert: s != nil && s?.budget == nil, action: { onWeb("/app/budgets/daily") })
         var out = Self.gridOrder.compactMap { byKey.removeValue(forKey: $0) }
         // 見本に無い道具（在庫設定など）は後ろに、サーバーの順で
         for t in tools { if let g = byKey.removeValue(forKey: t.href) { out.append(g) } }
