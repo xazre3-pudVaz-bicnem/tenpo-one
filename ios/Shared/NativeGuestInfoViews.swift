@@ -67,6 +67,10 @@ struct NativeSetupSheet: View {
     var embedded = false
     let onClose: () -> Void
     let onStarted: (String) -> Void
+    /// 「テーブル作成」（着席だけして注文は開かない）。nil なら注文開始と同じ
+    var onCreated: (() -> Void)? = nil
+    /// 左の列の下に並べるもの（テーブルグループ設定・テーブルブロック）
+    var leftFooter: AnyView? = nil
 
     /// 直しのとき：最初の値を入れ終えたか・開始時間を変えたか・席のコース
     @State private var prefilled = false
@@ -150,10 +154,14 @@ struct NativeSetupSheet: View {
             } right: { EmptyView() }
             }
 
+            if wide {
+                AnyView(wideLayout)
+            } else {
             // 入るならそのまま、入らない画面（縦向きなど）だけスクロール
             ViewThatFits(in: .vertical) {
                 AnyView(columns)
                 ScrollView(showsIndicators: false) { AnyView(columns) }
+            }
             }
 
             // キャンセル・確定は人数のテンキーの右へ（2026-10-27 19:35 Ronnie「sidai keyboard rakhdeu、1234 pardaina、milayera rakha」）。
@@ -181,6 +189,207 @@ struct NativeSetupSheet: View {
             // 見本：人数のテンキーを開いておく（-tenpoPreviewPad YES。画面の確認用）
             if UserDefaults.standard.bool(forKey: "tenpoPreviewPad") { openPad(.guests) }
         }
+    }
+
+
+    // MARK: 空席の来店登録（画面の真ん中の大きなポップアップ。2026-10-28 Ronnie の iPad の写真と同じ並び）
+    //   上：モード・プラン　左：タイマー設定（時間制・終了前注意・開始時刻・L.O.）　右：人数のテンキー＋テーブル作成・注文開始
+
+    private var wide: Bool { embedded && edit == nil }
+
+    private var wideLayout: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            HStack(alignment: .center) {
+                Text(table.name).font(.system(size: 30, weight: NT.strong)).foregroundColor(NFColor.ink)
+                Spacer()
+                Button(action: onClose) {
+                    HStack(spacing: 8) {
+                        Image(systemName: "xmark").font(.system(size: 16, weight: .medium))
+                        Text("キャンセル").font(.system(size: 18, weight: .medium))
+                    }
+                    .foregroundColor(NFColor.ink)
+                    .padding(.horizontal, 18).frame(height: 48)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle())
+            }
+            card {
+                wideLabelRow("モード", en: "Mode") { chooseField(planNames) { popup = .mode } }
+                rowDivider
+                wideLabelRow("プラン", en: "Plan") { chooseField(pickedPlanNames.isEmpty ? "未設定" : pickedPlanNames) { popup = .plan } }
+            }
+            HStack(alignment: .top, spacing: 18) {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("タイマー設定").font(.system(size: 13)).foregroundColor(NFColor.ink3).padding(.leading, 4)
+                    card { timerRows }
+                    if let leftFooter { leftFooter }
+                }
+                .frame(maxWidth: .infinity, alignment: .topLeading)
+                keypadPanel.frame(maxWidth: .infinity)
+            }
+            if let problem {
+                Text(problem).font(.system(size: 13)).foregroundColor(NFColor.danger)
+            }
+        }
+        .padding(.horizontal, 10).padding(.top, 6).padding(.bottom, 10)
+    }
+
+    @ViewBuilder private var timerRows: some View {
+        wideLabelRow("時間制", en: "Time limit") {
+            checkBox($timed, enabled: true)
+            dropField("\(duration / 60)", value: Binding(get: { duration / 60 }, set: { duration = max(15, $0 * 60 + duration % 60) }), options: Array(0...10), show: { "\($0)" }, enabled: timed)
+            unitText("時間")
+            dropField(String(format: "%02d", (duration % 60 / 5) * 5), value: Binding(get: { duration % 60 / 5 * 5 }, set: { duration = max(15, (duration / 60) * 60 + $0) }), options: Array(stride(from: 0, to: 60, by: 5)), show: { String(format: "%02d", $0) }, enabled: timed)
+            unitText("分")
+        }
+        rowDivider
+        wideLabelRow("終了前注意", en: "Last call") {
+            checkBox($warningEnabled, enabled: timed)
+            dropField("\(warningMinutes)分前", value: $warningMinutes, options: Array(Set([5, 10, 15, 20, 30, 45, 60, 90, warningMinutes])).sorted(), show: { "\($0)分前" }, enabled: timed && warningEnabled)
+        }
+        rowDivider
+        wideLabelRow("開始時刻", en: "Start time") {
+            Button { startNow = true; startChanged = true } label: {
+                Text("今").font(.system(size: 15, weight: .medium))
+                    .foregroundColor(startNow ? .white : NFColor.ink)
+                    .frame(width: 34, height: 34)
+                    .background(RoundedRectangle(cornerRadius: 9, style: .continuous).fill(startNow ? GIColor.navy : NFColor.fieldBg))
+            }
+            .buttonStyle(PressableStyle())
+            let cal = nfJstCalendar
+            let h = cal.component(.hour, from: effectiveStart)
+            let m = cal.component(.minute, from: effectiveStart)
+            dropField(String(format: "%02d", h), value: Binding(get: { h }, set: { startNow = false; setStart(hour: $0, minute: m) }), options: Array(0..<24), show: { String(format: "%02d", $0) }, enabled: true)
+            unitText("時")
+            dropField(String(format: "%02d", m), value: Binding(get: { m }, set: { startNow = false; setStart(hour: h, minute: $0) }), options: Array(0..<60), show: { String(format: "%02d", $0) }, enabled: true)
+            unitText("分")
+        }
+        rowDivider
+        wideLabelRow("L.O.", en: "Last order") {
+            Spacer(minLength: 0)
+            Text(timed ? nfHm(effectiveStart.addingTimeInterval(Double(duration - (warningEnabled ? warningMinutes : 0)) * 60)) : "—")
+                .font(.system(size: 22, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
+        }
+    }
+
+    private var keypadPanel: some View {
+        HStack(alignment: .top, spacing: 12) {
+            VStack(spacing: 10) {
+                HStack(alignment: .lastTextBaseline) {
+                    VStack(alignment: .leading, spacing: 0) {
+                        Text("人数").font(.system(size: 20, weight: .medium)).foregroundColor(NFColor.ink)
+                        Text("Guests").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                    }
+                    Spacer(minLength: 4)
+                    Text(guests > 0 ? "\(guests)" : "—").font(.system(size: 34, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink)
+                    Text("名").font(.system(size: 16)).foregroundColor(NFColor.ink3)
+                }
+                .padding(.horizontal, 4)
+                LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 8), count: 3), spacing: 8) {
+                    ForEach(["7", "8", "9", "4", "5", "6", "1", "2", "3", "00", "0", "C"], id: \.self) { k in
+                        Button { guestKey(k) } label: {
+                            Text(k)
+                                .font(.system(size: 30, weight: .regular)).monospacedDigit()
+                                .foregroundColor(k == "C" ? NFColor.danger : NFColor.ink)
+                                .frame(maxWidth: .infinity).frame(height: 66)
+                                .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+                                .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+                        }
+                        .buttonStyle(PressableStyle(scale: 0.95))
+                    }
+                }
+            }
+            VStack(spacing: 8) {
+                Button { Task { await confirm(openOrder: false) } } label: {
+                    VStack(spacing: 0) {
+                        Text("テーブル作成").font(.system(size: 18, weight: .medium))
+                        Text("Make table").font(.system(size: 12)).opacity(0.7)
+                    }
+                    .foregroundColor(NFColor.ink)
+                    .frame(maxWidth: .infinity).frame(height: 60)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(Color.white))
+                    .overlay(RoundedRectangle(cornerRadius: 12, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+                .disabled(!canConfirm).opacity(canConfirm ? 1 : 0.5)
+                Button { Task { await confirm() } } label: {
+                    VStack(spacing: 2) {
+                        Text(saving ? "作成中…" : "注文開始").font(.system(size: 22, weight: NT.strong))
+                        Text("Start order").font(.system(size: 12)).opacity(0.8)
+                    }
+                    .foregroundColor(.white)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(canConfirm ? GIColor.navy : GIColor.navy.opacity(0.35)))
+                }
+                .buttonStyle(PressableStyle(scale: 0.98))
+                .disabled(!canConfirm)
+            }
+            .frame(width: 150)
+        }
+        .padding(12)
+        .background(RoundedRectangle(cornerRadius: 14, style: .continuous).fill(Color.white))
+        .overlay(RoundedRectangle(cornerRadius: 14, style: .continuous).stroke(NFColor.line, lineWidth: 1))
+        .fixedSize(horizontal: false, vertical: true)
+    }
+
+    private func wideLabelRow<Right: View>(_ ja: String, en: String, @ViewBuilder right: () -> Right) -> some View {
+        HStack(spacing: 10) {
+            VStack(alignment: .leading, spacing: 0) {
+                Text(ja).font(.system(size: 18, weight: .medium)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Text(en).font(.system(size: 12)).foregroundColor(NFColor.ink3).lineLimit(1)
+            }
+            .frame(width: 118, alignment: .leading)
+            right()
+        }
+        .padding(.horizontal, 14)
+        .frame(minHeight: 70)
+    }
+
+    /// タップで小さなポップアップを開く欄（モード・プラン）
+    private func chooseField(_ text: String, action: @escaping () -> Void) -> some View {
+        Button(action: action) {
+            HStack {
+                Text(text).font(.system(size: 20, weight: .regular)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down").font(.system(size: 14, weight: .medium)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 14).frame(height: 50)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
+        }
+        .buttonStyle(PressableStyle(scale: 0.99))
+    }
+
+    /// 時・分・分前の選び（▾ を押すとその場で選ぶ）
+    private func dropField<T: Hashable>(_ text: String, value: Binding<T>, options: [T], show: @escaping (T) -> String, enabled: Bool) -> some View {
+        Menu {
+            Picker("", selection: value) { ForEach(options, id: \.self) { Text(show($0)).tag($0) } }
+        } label: {
+            HStack(spacing: 4) {
+                Text(text).font(.system(size: 20, weight: .regular)).monospacedDigit().foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 2)
+                Image(systemName: "chevron.down").font(.system(size: 12, weight: .medium)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 12).frame(height: 46)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
+        }
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
+    }
+
+    private func unitText(_ t: String) -> some View {
+        Text(t).font(.system(size: 14)).foregroundColor(NFColor.ink3)
+    }
+
+    private func checkBox(_ on: Binding<Bool>, enabled: Bool) -> some View {
+        Button { on.wrappedValue.toggle() } label: {
+            Image(systemName: on.wrappedValue ? "checkmark.square.fill" : "square")
+                .font(.system(size: 28, weight: .regular))
+                .foregroundColor(on.wrappedValue ? GIColor.navy.opacity(0.75) : NFColor.ink3)
+        }
+        .buttonStyle(.plain)
+        .disabled(!enabled)
+        .opacity(enabled ? 1 : 0.4)
     }
 
     /// 来店経路の列は出さない（会計で選ぶ）
@@ -441,7 +650,7 @@ struct NativeSetupSheet: View {
         planItemIds.removeAll { pid in !(planItems.contains { $0.id == pid }) }
     }
 
-    private func confirm() async {
+    private func confirm(openOrder: Bool = true) async {
         guard guests >= 1 else { problem = "人数を入れてください"; return }
         // 来店経路：直しのときは今のまま（空なら変えない）、来店登録は予約の経路（無ければ空＝会計で選ぶ）
         if edit == nil { source = bookedSource ?? "" }
@@ -479,7 +688,7 @@ struct NativeSetupSheet: View {
         if let r = await model.act(["type": "floorStart", "tableId": table.id, "draft": draft]), let id = r.orderId {
             if let e = r.planItemError, !e.isEmpty { model.show(toast: e) }
             if let c = customer { _ = await model.act(["type": "orderCustomer", "orderId": id, "customerId": c.id]) }
-            onStarted(id)
+            if openOrder { onStarted(id) } else if let onCreated { onCreated() } else { onStarted(id) }
         } else {
             problem = model.error
         }
@@ -718,6 +927,8 @@ struct NativeSetupSheet: View {
         switch k {
         case "C": guests = 0; guestTyped = false
         case "⌫": guests /= 10; guestTyped = true
+        case "00":
+            if guestTyped, guests > 0, guests * 100 <= 999 { guests *= 100 }
         default:
             guard let d = Int(k) else { return }
             if !guestTyped { guests = d; guestTyped = true } else if guests * 10 + d <= 999 { guests = guests * 10 + d }
