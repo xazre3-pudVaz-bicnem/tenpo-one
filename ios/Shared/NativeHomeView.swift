@@ -349,7 +349,7 @@ struct NativeHomeView: View {
             ScrollView(showsIndicators: false) {
                 VStack(spacing: 4) {
                     ForEach(Array(sidebarItems.enumerated()), id: \.element.key) { i, n in
-                        if i == 1 + Self.sideTools.count { Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 4) }
+                        if i == Self.sideTools.count { Rectangle().fill(Color.white.opacity(0.12)).frame(height: 1).padding(.horizontal, 14).padding(.vertical, 4) }
                         navCompact(n)
                     }
                 }
@@ -368,6 +368,8 @@ struct NativeHomeView: View {
         // 注文・会計 と 店舗台帳 は大きい箱が本体にあるので、左のメニューには入れない（2026-10-29 01:24 Ronnie「Menu bar ma kina chaiyo ra」）
         let bigKeys = Set(bigTiles.map { $0.href })
         var out = navItems.filter { !bigKeys.contains($0.key) }
+        // 入出金 は線の下、伝票明細の上（2026-10-29 02:54 Ronnie「入出金 ko mathi hala」）
+        if let i = out.firstIndex(where: { $0.key == "/app/cash" }) { let c = out.remove(at: i); out.append(c) }
         // ハンディQR はメニューのいちばん最後（2026-10-29 01:56 Ronnie）
         let ordered = gridTiles.filter { $0.key != "#handyqr" } + gridTiles.filter { $0.key == "#handyqr" }
         for g in ordered {
