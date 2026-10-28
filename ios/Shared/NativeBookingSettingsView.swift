@@ -164,7 +164,7 @@ struct NativeBookingSettingsView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 8) {
                 Button(action: onLedger) {
-                    HStack(spacing: 3) { Image(systemName: "chevron.left"); Text("店舗台帳へ戻る") }.font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.royal)
+                    HStack(spacing: 3) { Image(systemName: "chevron.left"); Text("テーブルリンクへ戻る") }.font(.system(size: 13, weight: .bold)).foregroundColor(NFColor.royal)
                 }.buttonStyle(.plain).padding(.trailing, 8)
                 Text(p.store.name).font(.system(size: 14, weight: .semibold)).foregroundColor(NFColor.ink2)
                 Spacer()

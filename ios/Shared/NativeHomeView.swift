@@ -175,7 +175,7 @@ struct NativeHomeView: View {
 
     private var tools: [NHTool] { model.payload?.tools ?? [] }
     private var bigTiles: [NHNamed] {
-        model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "注文・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")]
+        model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "注文・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "テーブルリンク", en: "TABLE LINK")]
     }
 
     var body: some View {

@@ -46,8 +46,8 @@ export const NAV_TILES: NavTile[] = [
   },
   {
     href: '/app/reservations',
-    label: '店舗台帳',
-    en: 'Reservation',
+    label: 'テーブルリンク',
+    en: 'TABLE LINK',
     icon: 'calendar',
     permission: 'reservations.view',
     match: ['/app/reservations'],
@@ -232,7 +232,7 @@ export function screenTitleFor(pathname: string): { label: string; en: string } 
 /** スマホ下部ナビ（5項目まで） */
 export const MOBILE_NAV: NavItem[] = [
   { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
-  { href: '/app/reservations', label: '店舗台帳', en: 'Reservation', icon: 'calendar', permission: 'reservations.view' },
+  { href: '/app/reservations', label: 'テーブルリンク', en: 'TABLE LINK', icon: 'calendar', permission: 'reservations.view' },
   // ハンディ（スマホでの注文取り）。iPad向けのオーダー画面とは別に、片手で使える画面を出す
   { href: '/app/handy', label: 'ハンディ', en: 'Handy', icon: 'pos', permission: 'pos.order' },
   { href: '/app/attendance', label: '勤怠', en: 'Attendance', icon: 'clock', permission: 'attendance.punch' },
@@ -246,7 +246,7 @@ export const MOBILE_NAV: NavItem[] = [
 export const TABLET_NAV: NavItem[] = [
   { href: '/app/dashboard', label: 'ホーム', en: 'Home', icon: 'home', permission: 'dashboard.view' },
   { href: '/app/floor', label: 'オーダー・会計', en: 'Order & Pay', icon: 'pos', permission: 'tables.operate' },
-  { href: '/app/reservations', label: '店舗台帳', en: 'Reservation', icon: 'calendar', permission: 'reservations.view' },
+  { href: '/app/reservations', label: 'テーブルリンク', en: 'TABLE LINK', icon: 'calendar', permission: 'reservations.view' },
   { href: '/app/attendance', label: '勤怠', en: 'Attendance', icon: 'clock', permission: 'attendance.punch' },
   { href: '/app/menu', label: 'メニュー', en: 'Menu', icon: 'more' },
 ];

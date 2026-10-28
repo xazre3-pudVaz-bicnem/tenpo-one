@@ -101,7 +101,7 @@ enum NSPData {
          "today":"\##(c.ymd)",
          "needsOpenRegister":false,
          "bigTiles":[{"href":"/app/floor","label":"注文・会計","en":"Order & Pay"},
-                     {"href":"/app/reservations","label":"店舗台帳","en":"Reservation"}],
+                     {"href":"/app/reservations","label":"テーブルリンク","en":"TABLE LINK"}],
          "tools":[
           {"href":"/app/quick-pay","label":"即会計","en":"Quick pay","icon":"calculator","action":null,"badge":null},
           {"href":"/app/orders","label":"伝票明細","en":"Slips / Receipts","icon":"receipt","action":null,"badge":null},
