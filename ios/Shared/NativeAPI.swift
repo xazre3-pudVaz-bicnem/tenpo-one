@@ -77,6 +77,32 @@ struct APISource: Codable { let id: String; let label: String }
 struct APIDiscountPreset: Codable { let id: String; let name: String; let kind: String; let value: Int }
 struct APISteraTerminal: Codable { let id: String; let name: String; let online: Bool }
 struct APISteraType: Codable { let code: String; let method: String; let label: String; let en: String? }
+/// Local configuration only. A saved address is never proof of POS connectivity.
+struct SteraLANConfiguration: Codable, Equatable {
+    let terminalID: String
+    let host: String
+
+    var usesAutomaticDiscovery: Bool { host.isEmpty }
+    var isValid: Bool {
+        !terminalID.isEmpty && terminalID.count <= 40 && (usesAutomaticDiscovery || Self.isLANIPv4(host))
+    }
+
+    static func isLANIPv4(_ host: String) -> Bool {
+        let parts = host.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 4 else { return false }
+        var bytes: [UInt8] = []
+        for part in parts {
+            guard !part.isEmpty, part.count <= 3, (part.count == 1 || part.first != "0"),
+                  part.utf8.allSatisfy({ $0 >= 48 && $0 <= 57 }),
+                  let byte = UInt8(part) else { return false }
+            bytes.append(byte)
+        }
+        return bytes[0] == 10
+            || (bytes[0] == 172 && bytes[1] >= 16 && bytes[1] <= 31)
+            || (bytes[0] == 192 && bytes[1] == 168)
+            || (bytes[0] == 169 && bytes[1] == 254)
+    }
+}
 struct APIStore: Codable { let id: String; let name: String }
 
 struct APIPayload: Codable {

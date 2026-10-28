@@ -14,7 +14,7 @@
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>レシート・請求書の写真を選んで添付するときに使います。</string>
 	<key>NSLocalNetworkUsageDescription</key>
-	<string>お店の Wi-Fi のレシートプリンター・キッチンプリンターとつなぐために使います。</string>
+	<string>お店の Wi-Fi のレシートプリンター・キッチンプリンター・決済端末とつなぐために使います。</string>
 	<key>NSBluetoothAlwaysUsageDescription</key>
 	<string>Bluetooth のレシートプリンター（ドロア）とつなぐために使います。</string>
 	<!-- 時計・電波・電池の字は白（上のバーがネイビー/黒なので）。画面の明るさ（ライト表示）とは別に決める。2026-10-25 00:12 Ronnie「時計・電波が見えない」 -->

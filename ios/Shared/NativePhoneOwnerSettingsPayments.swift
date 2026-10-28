@@ -252,7 +252,11 @@ struct NPSPaymentsPage: View {
                 }
             }
         }
-        Text("端末の「TENPO ONE 連携」アプリにリンクコードを入れます（サーバー：\(p.stera.serverUrl)）").font(.system(size: 11.5)).foregroundColor(NT.ink3).padding(.horizontal, 4)
+        ForEach(p.stera.terminals.filter { $0.active }) { terminal in
+            NativeSteraLANSetup(serverURL: p.stera.serverUrl, storeID: p.store.id, terminal: terminal, canEdit: p.canEditStera)
+        }
+        Text("端末登録のみでは接続完了になりません。LAN設定とクラウドのリンクコードは別の接続方式です。POS連動仕様と接続設定の確認後、実機での接続・決済テストが必要です。")
+            .font(.system(size: 11.5)).foregroundColor(NT.ink3).padding(.horizontal, 4)
     }
 
     static func linkCode(_ code: String) -> String {

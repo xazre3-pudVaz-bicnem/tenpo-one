@@ -7,6 +7,10 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		F28190D4ABCD4F2C991A0001 = {
+			isa = PBXBuildFile;
+			fileRef = F28190D4ABCD4F2C991A0002;
+		};
 		00907740C90527AE7C30FCF5 = {
 			isa = PBXBuildFile;
 			fileRef = "3319AF0DEFF1821025058199";
@@ -830,6 +834,12 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		F28190D4ABCD4F2C991A0002 = {
+			isa = PBXFileReference;
+			lastKnownFileType = sourcecode.swift;
+			path = SteraLANEngine.swift;
+			sourceTree = "<group>";
+		};
 		01501D5EBC3358593D02DD36 = {
 			isa = PBXFileReference;
 			lastKnownFileType = sourcecode.swift;
@@ -2131,6 +2141,7 @@
 				"956DFE02BC7361B56EDD90D3",
 				"94A43F329BE3F886B7757761",
 				"3DF8150016611E0D18EC1708",
+				F28190D4ABCD4F2C991A0002,
 				E760EE870ED095ECCB89A160,
 				A11CB8457C7DD6724A6D8103,
 				"3735DC8F3B65B3AD99D4D8B7",
@@ -2410,6 +2421,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = "2147483647";
 			files = (
+				F28190D4ABCD4F2C991A0001,
 				"2EF1E52EEE822F5DC67C3BF7",
 				"5EC034E111252F0B7CB2F1E1",
 				"9251238DBD5E9F2872052E3A",
