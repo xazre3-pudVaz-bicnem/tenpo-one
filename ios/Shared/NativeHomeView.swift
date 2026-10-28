@@ -403,9 +403,9 @@ struct NativeHomeView: View {
                 Button(action: { isFloor ? onFloor() : onWeb(t.href) }) {
                     VStack(alignment: .center, spacing: 14) {
                         if isFloor {
-                            FourSquareLogo(size: 56, color: Self.tileText)
+                            FourSquareLogo(size: 56, color: Self.sideBg)
                         } else {
-                            Image(systemName: "calendar").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.tileText)
+                            Image(systemName: "calendar").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.sideBg)
                         }
                         VStack(spacing: 6) {
                             Text(t.label).font(.system(size: 36, weight: .light)).tracking(1.5).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.6)
