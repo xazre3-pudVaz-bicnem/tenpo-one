@@ -239,10 +239,9 @@ struct NativeSetupSheet: View {
     @ViewBuilder private var timerRows: some View {
         wideLabelRow("時間制", en: "Time limit", grow: true) {
             checkBox($timed, enabled: true)
-            dropField("\(duration / 60)", value: Binding(get: { duration / 60 }, set: { duration = max(15, $0 * 60 + duration % 60) }), options: Array(0...10), show: { "\($0)" }, enabled: timed)
-            unitText("時間")
-            dropField(String(format: "%02d", (duration % 60 / 5) * 5), value: Binding(get: { duration % 60 / 5 * 5 }, set: { duration = max(15, (duration / 60) * 60 + $0) }), options: Array(stride(from: 0, to: 60, by: 5)), show: { String(format: "%02d", $0) }, enabled: timed)
-            unitText("分")
+            dropField("\(duration / 60)", value: Binding(get: { duration / 60 }, set: { duration = max(15, $0 * 60 + duration % 60) }), options: Array(0...10), show: { "\($0)時間" }, enabled: timed)
+            colonText
+            dropField(String(format: "%02d", (duration % 60 / 5) * 5), value: Binding(get: { duration % 60 / 5 * 5 }, set: { duration = max(15, (duration / 60) * 60 + $0) }), options: Array(stride(from: 0, to: 60, by: 5)), show: { String(format: "%02d分", $0) }, enabled: timed)
         }
         rowDivider
         wideLabelRow("終了前注意", en: "Last call", grow: true) {
@@ -261,10 +260,9 @@ struct NativeSetupSheet: View {
             let cal = nfJstCalendar
             let h = cal.component(.hour, from: effectiveStart)
             let m = cal.component(.minute, from: effectiveStart)
-            dropField(String(format: "%02d", h), value: Binding(get: { h }, set: { startNow = false; setStart(hour: $0, minute: m) }), options: Array(0..<24), show: { String(format: "%02d", $0) }, enabled: true)
-            unitText("時")
-            dropField(String(format: "%02d", m), value: Binding(get: { m }, set: { startNow = false; setStart(hour: h, minute: $0) }), options: Array(0..<60), show: { String(format: "%02d", $0) }, enabled: true)
-            unitText("分")
+            dropField(String(format: "%02d", h), value: Binding(get: { h }, set: { startNow = false; setStart(hour: $0, minute: m) }), options: Array(0..<24), show: { String(format: "%02d時", $0) }, enabled: true)
+            colonText
+            dropField(String(format: "%02d", m), value: Binding(get: { m }, set: { startNow = false; setStart(hour: h, minute: $0) }), options: Array(0..<60), show: { String(format: "%02d分", $0) }, enabled: true)
         }
         rowDivider
         wideLabelRow("L.O.", en: "Last order", grow: true) {
@@ -366,6 +364,10 @@ struct NativeSetupSheet: View {
     /// 時・分・分前の選び（▾ を押すと 4 つ分の高さの一覧が出て、残りはスクロール。2026-10-28 18:35 Ronnie「4 ota samma option、aru scroll」）
     private func dropField<T: Hashable>(_ text: String, value: Binding<T>, options: [T], show: @escaping (T) -> String, enabled: Bool) -> some View {
         NFDropField(text: text, value: value, options: options, show: show, enabled: enabled)
+    }
+
+    private var colonText: some View {
+        Text(":").font(.system(size: 22, weight: .regular)).foregroundColor(NFColor.ink3)
     }
 
     private func unitText(_ t: String) -> some View {
