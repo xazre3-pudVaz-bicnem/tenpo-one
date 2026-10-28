@@ -1460,7 +1460,14 @@ struct NFDropField<T: Hashable>: View {
                 .frame(width: 150, height: rowH * CGFloat(min(4, options.count)))
                 .onAppear { proxy.scrollTo(value, anchor: .center) }
             }
-            .presentationCompactAdaptation(.popover)
+            .nfPopoverAdapt()
         }
+    }
+}
+
+private extension View {
+    /// iPhone でも小さな一覧のまま出す（iOS 16.4 から。iPad は元から小さな一覧）
+    @ViewBuilder func nfPopoverAdapt() -> some View {
+        if #available(iOS 16.4, *) { self.presentationCompactAdaptation(.popover) } else { self }
     }
 }
