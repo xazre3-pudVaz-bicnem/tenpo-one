@@ -402,8 +402,11 @@ struct NativeHomeView: View {
                 let isFloor = t.href == "/app/floor"
                 Button(action: { isFloor ? onFloor() : onWeb(t.href) }) {
                     VStack(alignment: .center, spacing: 14) {
-                        Image(systemName: isFloor ? "list.bullet.rectangle" : "calendar")
-                            .font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.tileText)
+                        if isFloor {
+                            FourSquareLogo(size: 56, color: Self.tileText)
+                        } else {
+                            Image(systemName: "calendar").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.tileText)
+                        }
                         VStack(spacing: 6) {
                             Text(t.label).font(.system(size: 36, weight: .light)).tracking(1.5).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.6)
                             Text(t.en).font(.system(size: 13, weight: .regular)).tracking(1.5).foregroundColor(Self.inkSub)
@@ -773,5 +776,26 @@ struct NativeHomeView: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
         }
+    }
+}
+
+
+/// 4 つの小さい四角を 1 か所にまとめたロゴ（注文・会計の箱。2026-10-29 00:23 Ronnie）
+struct FourSquareLogo: View {
+    var size: CGFloat = 56
+    var color: Color
+    var body: some View {
+        let gap = size * 0.12
+        let cell = (size - gap) / 2
+        VStack(spacing: gap) {
+            HStack(spacing: gap) { square(cell); square(cell) }
+            HStack(spacing: gap) { square(cell); square(cell) }
+        }
+        .frame(width: size, height: size)
+    }
+    private func square(_ s: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: s * 0.22, style: .continuous)
+            .stroke(color, lineWidth: 1.6)
+            .frame(width: s, height: s)
     }
 }
