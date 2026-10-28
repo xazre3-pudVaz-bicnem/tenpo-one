@@ -215,9 +215,16 @@ struct NativeSetupSheet: View {
                 .buttonStyle(PressableStyle())
             }
             card {
-                wideLabelRow("モード", en: "Mode") { chooseField(planNames) { popup = .mode } }
+                // どちらも同じ一覧（4 つ分の高さ・あとはスクロール・何個でも選べる。2026-10-28 18:56 Ronnie「Drop down scroll、same as plan」）
+                wideLabelRow("モード", en: "Mode") {
+                    NFMultiDropField(text: planNames, items: (payload?.plans ?? []).map { ($0.id, $0.name) }, selected: plans, emptyText: "モードがありません") { togglePlan($0) }
+                }
                 rowDivider
-                wideLabelRow("プラン", en: "Plan") { chooseField(pickedPlanNames.isEmpty ? "未設定" : pickedPlanNames) { popup = .plan } }
+                wideLabelRow("プラン", en: "Plan") {
+                    NFMultiDropField(text: pickedPlanNames.isEmpty ? "未設定" : pickedPlanNames,
+                                     items: planItems.map { ($0.id, slipMenuItemIds.contains($0.id) ? "\($0.name)（伝票にあり）" : "\($0.name)  ¥\($0.price)") },
+                                     selected: planItemIds + slipMenuItemIds, emptyText: "このモードのプランはありません") { togglePlanItem($0) }
+                }
             }
             HStack(alignment: .top, spacing: 18) {
                 VStack(alignment: .leading, spacing: 8) {
@@ -632,6 +639,15 @@ struct NativeSetupSheet: View {
         .frame(width: 500)
         .background(NT.page, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
         .shadow(color: .black.opacity(0.18), radius: 28, y: 12)
+    }
+
+    /// プランの商品を選ぶ・外す（伝票にもう入っているものは触らない。コースなら時間制もそれに）
+    private func togglePlanItem(_ id: String) {
+        guard !slipMenuItemIds.contains(id) else { return }
+        if planItemIds.contains(id) { planItemIds.removeAll { $0 == id } } else { planItemIds.append(id) }
+        if let item = planItems.first(where: { $0.id == id }), item.kind == "course", let m = item.durationMinutes, m > 0, planItemIds.contains(id) {
+            timed = true; duration = m
+        }
     }
 
     private func togglePlan(_ id: String) {
@@ -1469,9 +1485,62 @@ struct NFDropField<T: Hashable>: View {
     }
 }
 
-private extension View {
+extension View {
     /// iPhone でも小さな一覧のまま出す（iOS 16.4 から。iPad は元から小さな一覧）
     @ViewBuilder func nfPopoverAdapt() -> some View {
         if #available(iOS 16.4, *) { self.presentationCompactAdaptation(.popover) } else { self }
+    }
+}
+
+
+/// 何個でも選べるドロップダウン（4 つ分の高さ・あとはスクロール）：モード・プラン
+struct NFMultiDropField: View {
+    let text: String
+    let items: [(id: String, label: String)]
+    let selected: [String]
+    let emptyText: String
+    let onToggle: (String) -> Void
+    @State private var open = false
+    private let rowH: CGFloat = 48
+
+    var body: some View {
+        Button { open = true } label: {
+            HStack {
+                Text(text).font(.system(size: 17)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                Spacer(minLength: 4)
+                Image(systemName: "chevron.down").font(.system(size: 13, weight: .medium)).foregroundColor(NFColor.ink3)
+            }
+            .padding(.horizontal, 14).frame(height: 40)
+            .background(RoundedRectangle(cornerRadius: 10, style: .continuous).fill(NFColor.fieldBg))
+        }
+        .buttonStyle(PressableStyle(scale: 0.99))
+        .popover(isPresented: $open) {
+            Group {
+                if items.isEmpty {
+                    Text(emptyText).font(.system(size: 16)).foregroundColor(NFColor.ink3)
+                        .padding(18).frame(width: 300)
+                } else {
+                    ScrollView(showsIndicators: true) {
+                        VStack(spacing: 0) {
+                            ForEach(items, id: \.id) { it in
+                                Button { onToggle(it.id) } label: {
+                                    HStack {
+                                        Text(it.label).font(.system(size: 19)).foregroundColor(NFColor.ink).lineLimit(1).minimumScaleFactor(0.7)
+                                        Spacer(minLength: 8)
+                                        if selected.contains(it.id) { Image(systemName: "checkmark").font(.system(size: 15, weight: .semibold)).foregroundColor(GIColor.navy) }
+                                    }
+                                    .padding(.horizontal, 16).frame(height: rowH)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                Divider()
+                            }
+                        }
+                    }
+                    .frame(width: 340, height: rowH * CGFloat(min(4, items.count)))
+                }
+            }
+            .nfPopoverAdapt()
+        }
     }
 }
