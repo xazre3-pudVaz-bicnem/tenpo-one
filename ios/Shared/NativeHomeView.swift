@@ -401,15 +401,16 @@ struct NativeHomeView: View {
             ForEach(Array(bigTiles.enumerated()), id: \.element.href) { _, t in
                 let isFloor = t.href == "/app/floor"
                 Button(action: { isFloor ? onFloor() : onWeb(t.href) }) {
-                    VStack(alignment: .leading, spacing: 0) {
+                    VStack(alignment: .center, spacing: 14) {
                         Image(systemName: isFloor ? "list.bullet.rectangle" : "calendar")
-                            .font(.system(size: 44, weight: .ultraLight)).foregroundColor(Self.tileText)
-                        Spacer(minLength: 0)
-                        Text(t.label).font(.system(size: 36, weight: .light)).tracking(1.5).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.6)
-                        Text(t.en).font(.system(size: 13, weight: .regular)).tracking(1.5).foregroundColor(Self.inkSub).padding(.top, 4)
+                            .font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.tileText)
+                        VStack(spacing: 6) {
+                            Text(t.label).font(.system(size: 36, weight: .light)).tracking(1.5).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.6)
+                            Text(t.en).font(.system(size: 13, weight: .regular)).tracking(1.5).foregroundColor(Self.inkSub)
+                        }
                     }
                     .padding(.horizontal, 28).padding(.vertical, 26)
-                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .leading)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
                     .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(Color.white))
                     .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(Self.cardLine, lineWidth: 1))
                 }
