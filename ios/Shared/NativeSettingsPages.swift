@@ -3226,6 +3226,76 @@ struct NPYBrand: Codable, Identifiable, Hashable { var key: String; var name: St
 struct NPYDiscount: Codable, Identifiable, Hashable { var key: String; var name: String; var kind: String; var value: Double; var id: String { key } }
 struct NPYIdLabel: Codable, Identifiable, Hashable { let id: String; let label: String }
 struct NPYStera: Codable, Identifiable, Hashable { let id: String; let name: String; let terminalNo: String?; let linkCode: String; let active: Bool; let online: Bool; let lastSeenLabel: String?; let appVersion: String? }
+
+/// Preparatory LAN settings. Discovery and payment require the provider protocol.
+struct NativeSteraLANSetup: View {
+    let serverURL: String
+    let storeID: String
+    let terminal: NPYStera
+    let canEdit: Bool
+    @State private var terminalID = ""
+    @State private var host = ""
+    @State private var saved: SteraLANConfiguration?
+
+    private var storageKey: String { "tenpo.stera.lan.\(serverURL).\(storeID).\(terminal.id)" }
+    private var configuration: SteraLANConfiguration {
+        SteraLANConfiguration(terminalID: terminalID.trimmingCharacters(in: .whitespacesAndNewlines),
+                              host: host.trimmingCharacters(in: .whitespacesAndNewlines))
+    }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            NTPopupLabel(title: "\(terminal.name)・LAN設定", subtitle: "LAN setup on this device")
+            Text("iPadとsteraを同じルーターのWi-Fi／LANにつなぎ、連動アプリに表示される決済端末IDを登録してください。IPアドレスの手入力は通常不要です。")
+                .font(.system(size: 13)).foregroundColor(NT.ink2)
+            NTPopupLabel(title: "決済端末ID", subtitle: "Terminal ID")
+            TextField("連動アプリに表示されるID", text: $terminalID)
+                .textInputAutocapitalization(.never).autocorrectionDisabled()
+                .textFieldStyle(.roundedBorder).disabled(!canEdit)
+            DisclosureGroup("詳細設定（IPアドレスを手動指定）") {
+                VStack(alignment: .leading, spacing: 8) {
+                    NTPopupLabel(title: "IPアドレス（任意）", subtitle: "Optional manual IP address")
+                    TextField("空欄：端末IDで自動検索", text: $host)
+                        .keyboardType(.numbersAndPunctuation).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        .textFieldStyle(.roundedBorder).disabled(!canEdit)
+                    if !host.isEmpty && !SteraLANConfiguration.isLANIPv4(configuration.host) {
+                        Text("店舗内のIPv4アドレスを入力してください（URL・ポート番号は不要です）。")
+                            .font(.system(size: 12)).foregroundColor(NT.danger)
+                    }
+                    Text("通常は空欄のままにします。")
+                        .font(.system(size: 12)).foregroundColor(NT.ink3)
+                }
+                .padding(.top, 8)
+            }
+            Button {
+                guard canEdit, configuration.isValid,
+                      let data = try? JSONEncoder().encode(configuration) else { return }
+                UserDefaults.standard.set(data, forKey: storageKey)
+                saved = configuration
+            } label: {
+                NTPopupLabel(title: configuration.usesAutomaticDiscovery ? "端末IDを保存" : "設定を保存", subtitle: "Save setup", alignment: .center)
+                    .frame(maxWidth: .infinity, minHeight: 56)
+                    .foregroundColor(.white)
+                    .background(NT.purple, in: RoundedRectangle(cornerRadius: NTPopupStyle.controlRadius))
+            }
+            .buttonStyle(PressableStyle())
+            .disabled(!canEdit || !configuration.isValid || configuration == saved)
+            .opacity(!canEdit || !configuration.isValid || configuration == saved ? 0.4 : 1)
+            Text(saved == configuration ? (configuration.usesAutomaticDiscovery ? "端末ID保存済み・自動検索は準備中" : "設定保存済み・LAN接続は未確認") : "LAN連携の準備")
+                .font(.system(size: 13, weight: .semibold)).foregroundColor(NT.ink2)
+            Text("この端末と店舗にのみ保存します。LAN連携は準備中です。IDの自動検索・接続確認・決済はまだ利用できません。設定の保存だけでは接続完了になりません。")
+                .font(.system(size: 12)).foregroundColor(NT.ink3)
+        }
+        .padding(16)
+        .background(NT.card, in: RoundedRectangle(cornerRadius: NTPopupStyle.cardRadius))
+        .overlay(RoundedRectangle(cornerRadius: NTPopupStyle.cardRadius).stroke(NT.lilacLine))
+        .task(id: storageKey) {
+            saved = UserDefaults.standard.data(forKey: storageKey).flatMap { try? JSONDecoder().decode(SteraLANConfiguration.self, from: $0) }
+            terminalID = saved?.terminalID ?? terminal.terminalNo ?? ""
+            host = saved?.host ?? ""
+        }
+    }
+}
 struct NPYReader: Codable, Identifiable, Hashable { let id: String; let label: String; let deviceType: String?; let isSimulated: Bool; let status: String; let statusLabel: String; let lastSeenAt: String? }
 struct NPYPayload: Codable {
     struct Stripe: Codable { let configured: Bool; let testMode: Bool }
@@ -3514,7 +3584,7 @@ struct NativePaymentsView: View {
     // stera 連携
     private func steraTab(_ p: NPYPayload) -> some View {
         VStack(alignment: .leading, spacing: 16) {
-            NSPCard(title: "stera 連携", en: "金額を端末へ自動で送る", note: p.canEditStera ? nil : "stera 端末の追加・変更は管理画面（パソコン・店長以上のアカウント）で行ってください") {
+            NSPCard(title: "stera 連携", en: "端末登録・接続状況", note: p.canEditStera ? nil : "stera 端末の追加・変更は管理画面（パソコン・店長以上のアカウント）で行ってください") {
                 VStack(spacing: 0) {
                     if p.stera.terminals.isEmpty {
                         Text("まだ stera 端末がありません").font(.system(size: 14)).foregroundColor(NFColor.ink3).padding(18)
@@ -3559,10 +3629,13 @@ struct NativePaymentsView: View {
                     }
                 }
             }
-            // つなぎ方（短く）
+            ForEach(p.stera.terminals.filter { $0.active }) { terminal in
+                NativeSteraLANSetup(serverURL: p.stera.serverUrl, storeID: p.store.id, terminal: terminal, canEdit: p.canEditStera)
+            }
+            // クラウド方式とLAN設定は別。登録だけで接続済みとはしない。
             HStack(alignment: .top, spacing: 10) {
                 Image(systemName: "info.circle").foregroundColor(NFColor.ink3)
-                Text("端末の「TENPO ONE 連携」アプリにリンクコードを入れる（サーバー：\(p.stera.serverUrl)）").font(.system(size: 13)).foregroundColor(NFColor.ink3)
+                Text("端末登録のみでは接続完了になりません。LAN設定とクラウドのリンクコードは別の接続方式です。POS連動仕様と接続設定の確認後、実機での接続・決済テストが必要です。").font(.system(size: 13)).foregroundColor(NFColor.ink3)
             }
         }
     }
