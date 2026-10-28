@@ -98,7 +98,7 @@ export function ReservationPanel({
           <span className="pointer-events-none absolute inset-0 bg-[linear-gradient(180deg,rgba(255,255,255,0.22),rgba(255,255,255,0)_55%)]" />
           <LedgerIcon className="relative h-[22px] w-[22px]" />
           <span className="relative leading-tight">
-            <b className="block text-[15px] font-bold">店舗台帳</b>
+            <b className="block text-[15px] font-bold">テーブルリンク</b>
             <span className="block text-[10px] text-white/80">Reservation</span>
           </span>
         </Link>

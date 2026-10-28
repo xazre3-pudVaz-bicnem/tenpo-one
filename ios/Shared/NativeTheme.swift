@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 /// ネイティブのレジ画面の色（Web の TENPO ONE と同じ色。2026-10-13 Ronnie「Airレジのように、アプリは全部ネイティブで」）
 enum NT {
@@ -106,6 +109,22 @@ extension Color {
 }
 
 /// 押すと少し沈むボタン（Airレジのような手触り）
+/// ホームの箱・メニュー用：押すと halka haptic + ばね＋ほんの少し暗く（色・字は変えない。2026-10-29 00:13 Ronnie「halka tap lai alli alive jasto feel」）
+struct LiveTapStyle: ButtonStyle {
+    var scale: CGFloat = 0.96
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? scale : 1)
+            .brightness(configuration.isPressed ? -0.03 : 0)
+            .animation(.spring(response: 0.28, dampingFraction: 0.55), value: configuration.isPressed)
+            .onChange(of: configuration.isPressed) { pressed in
+                #if canImport(UIKit)
+                if pressed { UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                #endif
+            }
+    }
+}
+
 struct PressableStyle: ButtonStyle {
     var scale: CGFloat = 0.97
     func makeBody(configuration: Configuration) -> some View {

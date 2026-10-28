@@ -127,7 +127,7 @@ export const V2_SECTIONS: V2Section[] = [
     groups: [
       {
         key: 'daicho',
-        label: '店舗台帳',
+        label: 'テーブルリンク',
         icon: 'calendar',
         links: [
           { href: '/app/reservations', label: '予約台帳（タイムライン）', permission: 'reservations.view' },

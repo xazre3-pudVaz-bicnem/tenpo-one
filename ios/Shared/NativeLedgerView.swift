@@ -643,7 +643,7 @@ struct NativeLedgerView: View {
                 .accessibilityLabel("ホーム")
                 // 店名は出さない（ホームだけ）。その場所に画面の名前（2026-10-24 18:55・18:56 Ronnie）
                 VStack(alignment: .leading, spacing: 0) {
-                    Text("店舗台帳").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
+                    Text("テーブルリンク").font(.system(size: 17, weight: NT.strong)).foregroundColor(.white)
                     Text("Reservation").font(.system(size: 12, weight: .bold)).foregroundColor(NLColor.yellow)
                 }
                 .fixedSize()
@@ -779,7 +779,7 @@ struct NativeLedgerView: View {
         let width = nameW + CGFloat(slots) * slotW + 32
         let page = VStack(alignment: .leading, spacing: 10) {
             HStack(alignment: .firstTextBaseline, spacing: 12) {
-                Text("店舗台帳").font(.system(size: 22, weight: NT.strong)).foregroundColor(NLColor.navy)
+                Text("テーブルリンク").font(.system(size: 22, weight: NT.strong)).foregroundColor(NLColor.navy)
                 Text("\(p.store.name)　\(dateLabel)").font(.system(size: 15, weight: .bold)).foregroundColor(NLColor.muted)
             }
             summaryRow(p)
@@ -787,7 +787,7 @@ struct NativeLedgerView: View {
         }
         .padding(16)
         .background(Color.white)
-        if let url = NLShare.pdf(of: page, width: width, name: "店舗台帳_\(d).pdf") { NLShare.present(url: url) } else { model.error = "PDF を作れませんでした" }
+        if let url = NLShare.pdf(of: page, width: width, name: "テーブルリンク_\(d).pdf") { NLShare.present(url: url) } else { model.error = "PDF を作れませんでした" }
     }
 
     private func navBtn(_ icon: String, action: @escaping () -> Void) -> some View {

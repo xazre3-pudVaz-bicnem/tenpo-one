@@ -244,7 +244,7 @@ struct NPOLedgerView: View {
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            NPOFrame(title: "店舗台帳", subtitle: model.payload?.store.name ?? "", onBack: onBack) {
+            NPOFrame(title: "テーブルリンク", subtitle: model.payload?.store.name ?? "", onBack: onBack) {
                 topButtons
             } content: {
                 VStack(spacing: 0) {

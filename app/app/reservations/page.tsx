@@ -28,7 +28,7 @@ import { reservationClerkOptions } from '@/lib/reservation-clerks-server';
 import { loadReservationInbox } from '@/lib/reservation-inbox-server';
 import { InboxNoticeList, InboxTaskList, ReservationInboxTabs } from '@/components/reservations/inbox/reservation-inbox';
 
-export const metadata: Metadata = { title: '店舗台帳' };
+export const metadata: Metadata = { title: 'テーブルリンク' };
 
 const DEFAULT_START_MIN = 11 * 60;
 const DEFAULT_END_MIN = 23 * 60;
@@ -111,7 +111,7 @@ export default async function ReservationsLedgerPage({ searchParams }: { searchP
   if (!store) {
     return (
       <div>
-        <PageHeader title="店舗台帳" en="Reservation" />
+        <PageHeader title="テーブルリンク" en="TABLE LINK" />
         <EmptyState title="アクセス可能な店舗がありません" description="管理者に店舗への招待を依頼してください。" />
       </div>
     );

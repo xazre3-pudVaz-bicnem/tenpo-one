@@ -148,6 +148,7 @@ struct NativeHomeView: View {
     var onFloor: () -> Void = {}
     /// ハンディQR をネイティブで大きく出す（2026-10-24）
     @State private var handyQrOpen = false
+    @ObservedObject private var app = AppState.shared
     // テーブルのお客様QR（印刷・再発行）は 設定 の中から（2026-10-24 19:01 Ronnie。前はホームの上のボタン）
 
     private static let blue = Color(hex: 0x1A5AD6)
@@ -174,8 +175,9 @@ struct NativeHomeView: View {
     private static let gridOrder = ["/app/orders", "#handyqr", "/app/cash/close", "/app/expenses", "#analytics", "#budget"]
 
     private var tools: [NHTool] { model.payload?.tools ?? [] }
+    /// 大きい2つの名前（2026-10-29 04:13 Ronnie）：注文・会計 ／ テーブル管理、ご予約管理 ／ テーブルリンク（大きい字が名前、小さい字が下の言葉）
     private var bigTiles: [NHNamed] {
-        model.payload?.bigTiles ?? [NHNamed(href: "/app/floor", label: "注文・会計", en: "Order & Pay"), NHNamed(href: "/app/reservations", label: "店舗台帳", en: "Reservation")]
+        [NHNamed(href: "/app/floor", label: "注文・会計", en: "TABLE ONE"), NHNamed(href: "/app/reservations", label: "ご予約管理", en: "TABLE LINK")]
     }
 
     var body: some View {
@@ -187,13 +189,9 @@ struct NativeHomeView: View {
                     VStack(spacing: 0) {
                         topBar
                         // 箱のあいだは同じだけ空ける（画面が大きい iPad でも下に寄って空かない）
-                        VStack(spacing: 0) {
-                            tileGrid(columns: 3)
-                            Spacer(minLength: 14)
-                            salesCard(narrow: false)
-                            Spacer(minLength: 14)
-                            clockRow
-                            Spacer(minLength: 14)
+                        VStack(spacing: 14) {
+                            bigTileRow
+                            summaryCard
                             kpiRow(columns: 4)
                         }
                         .padding(.horizontal, 20)
@@ -272,6 +270,18 @@ struct NativeHomeView: View {
                 // お知らせのベルは出さない。お知らせ（仕入・経費）は「仕入・経費」の箱の赤い数字で（無いときは何も出ない）
                 // （2026-10-27 02:34 Ronnie「top ma vayeko ring bell 仕入・経費 ko vayeko hunale notify aauda tei button ma dekhine banau」）
                 // 店名はログアウトの横（2026-10-24 19:03 Ronnie）。ハンディQR は右の箱へ（2026-10-27 の見本）
+                // 右上は「ハンディQR　店名　レジ担当」の順（2026-10-29 05:25 Ronnie）
+                Button { handyQrOpen = true } label: {
+                    HStack(spacing: 6) {
+                        Image(systemName: "qrcode")
+                        Text("ハンディQR").lineLimit(1)
+                    }
+                    .font(.system(size: 15, weight: .semibold)).foregroundColor(Self.tileText)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(Color.white))
+                    .overlay(Capsule().stroke(Self.tileLine, lineWidth: 1))
+                }
+                .buttonStyle(LiveTapStyle(scale: 0.96))
                 HStack(spacing: 6) {
                     Image(systemName: "storefront")
                     Text(model.payload?.store.name ?? "").lineLimit(1)
@@ -280,6 +290,16 @@ struct NativeHomeView: View {
                 .padding(.horizontal, 14).padding(.vertical, 8)
                 .background(Capsule().fill(Color.white))
                 .overlay(Capsule().stroke(Self.tileLine, lineWidth: 1))
+                if let clerk = app.regiClerk {
+                    HStack(spacing: 6) {
+                        Image(systemName: "person.crop.circle")
+                        Text("担当 \(clerk.name)").lineLimit(1)
+                    }
+                    .font(.system(size: 15, weight: .semibold)).foregroundColor(Self.tileText)
+                    .padding(.horizontal, 14).padding(.vertical, 8)
+                    .background(Capsule().fill(Color.white))
+                    .overlay(Capsule().stroke(Self.tileLine, lineWidth: 1))
+                }
             }
             .padding(.horizontal, 20)
             .frame(height: 52)
@@ -299,6 +319,8 @@ struct NativeHomeView: View {
         let en: String
         var active = false
         var badge: Int? = nil
+        /// 指定があればこの SF Symbol（左のメニューに足した 伝票明細 など）
+        var symbol: String? = nil
         let action: () -> Void
     }
 
@@ -320,15 +342,20 @@ struct NativeHomeView: View {
 
     /// 左のメニューのアイコンは「ホーム」と同じ線のアイコンで、字と同じ色（地に合わせる。白い四角・色は付けない）。
     /// 形は今までのまま（2026-10-27 01:46 Ronnie「clip sign haruko color home button ko jasto background sanga milne … setting ko alali vayeko chhaina」）
-    private func navIcon(_ n: NavItem, size: CGFloat) -> some View {
+    private func navIcon(_ n: NavItem, size: CGFloat) -> AnyView {
         let sym: String
+        // 注文・会計 は箱と同じ、画面の中に 4 つの四角があるモニター（2026-10-29 01:14 Ronnie）
+        if n.icon == "floor" { return AnyView(MonitorLogo(size: size * 0.8, color: n.active ? Self.sideActiveText : Self.sideText, line: 1.3).frame(width: size, height: size)) }
+        // 即会計 は昔ながらのレジの形（2026-10-29 01:43 Ronnie「Quick pay ko logo classic rezi ko hasto」）
+        if n.icon == "/app/quick-pay" { return AnyView(RegisterLogo(size: size * 0.9, color: n.active ? Self.sideActiveText : Self.sideText, line: 1.3).frame(width: size, height: size)) }
+        if let own = n.symbol { return AnyView(Image(systemName: own).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)) }
         switch n.icon {
         case "home": sym = "house"
         case "floor": sym = "desktopcomputer"
         case "ledger": sym = "calendar"
         default: sym = Self.toolIcon(n.icon).0
         }
-        return Image(systemName: sym).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size)
+        return AnyView(Image(systemName: sym).font(.system(size: size * 0.62, weight: .regular)).frame(width: size, height: size))
     }
 
     private var sidebar: some View {
@@ -342,18 +369,163 @@ struct NativeHomeView: View {
             .frame(maxWidth: .infinity)
             .overlay(alignment: .bottom) { Rectangle().fill(Color.white.opacity(0.10)).frame(height: 1) }
             .padding(.bottom, 6)
-            // 上の 3 つ（ホーム・オーダー・会計・店舗台帳）は大きい箱（アイコンが上）、道具は横長の箱
-            let items = navItems
-            ForEach(Array(items.enumerated()), id: \.element.key) { i, n in
-                navTile(n, tall: i < 1 + bigTiles.count)
+            // 全部の選択肢を左のメニューに（2026-10-28 22:04 Ronnie「option sabai left mai rakha」）
+            ScrollView(showsIndicators: false) {
+                VStack(spacing: 4) {
+                    ForEach(Array(sidebarItems.enumerated()), id: \.element.key) { i, n in
+                        navCompact(n)
+                    }
+                }
             }
             Spacer(minLength: 0)
-            if let st = tools.first(where: { $0.href == Self.settingsHref }) { navTile(navItem(st), tall: true) }
+            if let st = tools.first(where: { $0.href == Self.settingsHref }) { navCompact(navItem(st)) }
         }
         .padding(.horizontal, 10)
         .padding(.bottom, 14)
         .frame(maxHeight: .infinity)
         .background(Self.sideBg)
+    }
+
+    /// 左のメニューの全部：ホーム・注文・会計・店舗台帳・即会計・入出金・ドロア ＋ 伝票明細・ハンディQR・レジクローズ・仕入・経費・店舗分析・予算登録
+    private var sidebarItems: [NavItem] {
+        // 2026-10-29 05:25 Ronnie の並び：ホーム／即会計／伝票明細（Payment history）／入出金／仕入・経費／…／レジクローズ（いちばん最後）。
+        // ハンディQR は上のバーへ。大きい2つの箱は本体にあるのでメニューに入れない。
+        // 書いてなかったもの（ドロア・店舗分析・予算登録）は消さず、レジクローズの前に置く
+        var all: [String: NavItem] = [:]
+        for n in navItems { all[n.key] = n }
+        for g in gridTiles {
+            all["g" + g.key] = NavItem(key: "g" + g.key, icon: g.key, label: g.label, en: g.en, badge: g.badge, symbol: g.icon, action: g.action)
+        }
+        let order = ["home", "/app/quick-pay", "g/app/orders", "/app/cash", "g/app/expenses", "#drawer", "g#analytics", "g#budget", "g/app/cash/close"]
+        return order.compactMap { all[$0] }
+    }
+
+    private func navCompact(_ n: NavItem) -> some View {
+        let fg = n.active ? Self.sideActiveText : Self.sideText
+        let sub = n.active ? Self.sideActiveText.opacity(0.7) : Self.sideSub
+        return Button(action: n.action) {
+            VStack(spacing: 2) {
+                navIcon(n, size: 26)
+                Text(n.label).font(.system(size: 12.5, weight: .regular)).lineLimit(1).minimumScaleFactor(0.6)
+                Text(n.en).font(.system(size: 9, weight: .regular)).foregroundColor(sub).lineLimit(1).minimumScaleFactor(0.6)
+            }
+            .padding(.horizontal, 4)
+            .frame(maxWidth: .infinity).frame(height: 60)
+            .foregroundColor(fg)
+            .background(RoundedRectangle(cornerRadius: 12, style: .continuous).fill(n.active ? Self.sideActive : Color.clear))
+            .overlay(alignment: .topTrailing) {
+                if let b = n.badge, b > 0 {
+                    Text("\(b)").font(.system(size: 10, weight: .regular)).foregroundColor(.white)
+                        .frame(minWidth: 16).padding(.horizontal, 3).frame(height: 16)
+                        .background(Capsule().fill(Color(hex: 0xE53935)))
+                        .offset(x: -2, y: 2)
+                }
+            }
+        }
+        .buttonStyle(LiveTapStyle(scale: 0.94))
+        .disabled(model.busy && n.key == "#drawer")
+    }
+
+    // MARK: 注文・会計 と 店舗台帳 の大きい白い箱（2026-10-28 22:04 Ronnie の最終見本）
+
+    private var bigTileRow: some View {
+        HStack(spacing: 14) {
+            ForEach(Array(bigTiles.enumerated()), id: \.element.href) { _, t in
+                let isFloor = t.href == "/app/floor"
+                Button(action: { isFloor ? onFloor() : onWeb(t.href) }) {
+                    VStack(alignment: .center, spacing: 14) {
+                        if isFloor {
+                            MonitorLogo(size: 62, color: Self.sideBg, line: 1.6)
+                        } else {
+                            Image(systemName: "calendar").font(.system(size: 56, weight: .ultraLight)).foregroundColor(Self.sideBg)
+                        }
+                        VStack(spacing: 6) {
+                            Text(t.label).font(.system(size: 36, weight: .light)).tracking(1.5).foregroundColor(Self.tileText).lineLimit(1).minimumScaleFactor(0.6)
+                            Text(t.en).font(.system(size: 13, weight: .regular)).tracking(1.5).foregroundColor(Self.inkSub)
+                        }
+                    }
+                    .padding(.horizontal, 28).padding(.vertical, 26)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+                    // 少し色を付ける（2026-10-29 01:23 Ronnie「alli color chamkilo」）注文・会計＝うすい紫、店舗台帳＝うすい黄色
+                    .background(RoundedRectangle(cornerRadius: 24, style: .continuous).fill(isFloor ? Self.sideBg.opacity(0.16) : Self.sideActive.opacity(0.38)))
+                    .overlay(RoundedRectangle(cornerRadius: 24, style: .continuous).stroke(isFloor ? Self.sideBg.opacity(0.45) : Self.sideActive, lineWidth: 1.5))
+                }
+                .buttonStyle(LiveTapStyle(scale: 0.97))
+            }
+        }
+        .frame(maxHeight: .infinity)
+    }
+
+    // MARK: 実績売上・達成率・日付と時計を 1 つの白い箱に
+
+    private var summaryCard: some View {
+        let s = model.payload?.sales
+        return card {
+            HStack(alignment: .center, spacing: 28) {
+                VStack(alignment: .leading, spacing: 8) {
+                    // 上の行は「実績売上高　客単価」、その下に「予算売上高」（字はそのまま、置き場所だけ。2026-10-29 05:25 Ronnie）
+                    HStack(alignment: .top, spacing: 44) {
+                        VStack(alignment: .leading, spacing: 8) {
+                            // 英語は日本語の下（2026-10-29 01:58 Ronnie「日本語ko tala english lekha」）
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("実績売上高").font(.system(size: 15, weight: .regular))
+                                Text("Sales").font(.system(size: 12))
+                            }
+                            .foregroundColor(Self.inkSub)
+                            Text(NT.yen(s?.actual ?? 0)).font(.system(size: 46, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                                .lineLimit(1).minimumScaleFactor(0.6)
+                        }
+                        VStack(alignment: .leading, spacing: 8) {
+                            VStack(alignment: .leading, spacing: 0) {
+                                Text("客単価").font(.system(size: 15, weight: .regular))
+                                Text(" ").font(.system(size: 12))
+                            }
+                            .foregroundColor(Self.inkSub)
+                            Text(NT.yen(s?.avgSpend ?? 0)).font(.system(size: 46, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                                .lineLimit(1).minimumScaleFactor(0.6)
+                        }
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        VStack(alignment: .leading, spacing: 0) {
+                            Text("予算売上高").font(.system(size: 13, weight: .regular))
+                            Text("Target").font(.system(size: 11))
+                        }
+                        .foregroundColor(Self.inkSub)
+                        Text(s?.budget.map { NT.yen($0) } ?? "—").font(.system(size: 20, weight: .light)).monospacedDigit().foregroundColor(Self.ink)
+                    }
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.clockwise").font(.system(size: 10))
+                        Text(s?.asOf ?? "").font(.system(size: 11))
+                        if let n = s?.note { Text(n).font(.system(size: 11)) }
+                    }
+                    .foregroundColor(Self.inkSub)
+                }
+                // 丸は左の字と右の時計の真ん中（2026-10-29 01:41 Ronnie「Round alli tada banau like middle」）
+                Spacer(minLength: 0)
+                ring(s, size: 124)
+                Spacer(minLength: 0)
+                Rectangle().fill(Self.cardLine).frame(width: 1, height: 110)
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(Self.dateFmt.string(from: model.now)).font(.system(size: 14, weight: .regular)).foregroundColor(Self.inkSub)
+                    HStack(alignment: .lastTextBaseline, spacing: 4) {
+                        Text(Self.hmFmt.string(from: model.now)).font(.system(size: 46, weight: .light)).monospacedDigit()
+                        Text(Self.ssFmt.string(from: model.now)).font(.system(size: 16, weight: .light)).monospacedDigit().opacity(0.5)
+                    }
+                    .foregroundColor(Self.ink)
+                    HStack(spacing: 8) {
+                        if let t = model.payload?.weather.temperature {
+                            if let sym = model.payload?.weather.symbol { Image(systemName: sym).font(.system(size: 18, weight: .regular)) }
+                            Text("\(Int(t.rounded()))°").font(.system(size: 18, weight: .regular))
+                        }
+                        if let p = model.payload?.weather.place { Text(p).font(.system(size: 13, weight: .regular)).lineLimit(1) }
+                    }
+                    .foregroundColor(Self.inkSub)
+                }
+                .frame(minWidth: 220, alignment: .leading)
+            }
+            .padding(.horizontal, 32).padding(.vertical, 18)
+        }
+        .frame(height: 190)
     }
 
     private func navTile(_ n: NavItem, tall: Bool) -> some View {
@@ -430,10 +602,10 @@ struct NativeHomeView: View {
         // ハンディQR は今までの上のバーと同じ qrcode（紺）
         byKey["#handyqr"] = GridTile(key: "#handyqr", icon: "qrcode", color: NFColor.navy, label: "ハンディQR", en: "Handy QR", action: { handyQrOpen = true })
         if s?.canAnalytics ?? false {
-            byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.bar", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
+            byKey["#analytics"] = GridTile(key: "#analytics", icon: "chart.line.uptrend.xyaxis", label: "店舗分析", en: "Analytics", action: { onWeb("/app/reports") })
         }
         // 予算が未設定のときは右上に赤い丸の「!」（文字は書かない。2026-10-24 Ronnie）
-        byKey["#budget"] = GridTile(key: "#budget", icon: "chart.bar", label: "予算登録", en: "Set budget", alert: s != nil && s?.budget == nil, action: { onWeb("/app/budgets/daily") })
+        byKey["#budget"] = GridTile(key: "#budget", icon: "target", label: "予算登録", en: "Set budget", alert: s != nil && s?.budget == nil, action: { onWeb("/app/budgets/daily") })
         var out = Self.gridOrder.compactMap { byKey.removeValue(forKey: $0) }
         // 見本に無い道具（在庫設定など）は後ろに、サーバーの順で
         for t in tools { if let g = byKey.removeValue(forKey: t.href) { out.append(g) } }
@@ -649,5 +821,60 @@ struct NativeHomeView: View {
             }
             .padding(.horizontal, 20).padding(.vertical, 14)
         }
+    }
+}
+
+/// 画面の中に 4 つの小さい四角があるモニターのロゴ（注文・会計）
+struct MonitorLogo: View {
+    var size: CGFloat = 62
+    var color: Color
+    var line: CGFloat = 1.5
+    var body: some View {
+        let w = size
+        let h = size * 0.68
+        let gap = w * 0.07
+        let cell = (h - w * 0.2 - gap) / 2
+        VStack(spacing: size * 0.05) {
+            ZStack {
+                RoundedRectangle(cornerRadius: w * 0.1, style: .continuous).stroke(color, lineWidth: line).frame(width: w, height: h)
+                VStack(spacing: gap) {
+                    HStack(spacing: gap) { sq(cell); sq(cell) }
+                    HStack(spacing: gap) { sq(cell); sq(cell) }
+                }
+            }
+            Rectangle().fill(color).frame(width: w * 0.3, height: line)
+        }
+        .frame(width: size, height: size)
+    }
+    private func sq(_ s: CGFloat) -> some View {
+        RoundedRectangle(cornerRadius: s * 0.2, style: .continuous).stroke(color, lineWidth: line).frame(width: s, height: s)
+    }
+}
+
+/// 昔ながらのレジ（上に小さい画面、ボタンの面、下にドロア）。線だけ。
+struct RegisterLogo: View {
+    var size: CGFloat
+    var color: Color
+    var line: CGFloat = 1.3
+    var body: some View {
+        let w = size, h = size
+        ZStack {
+            // 画面
+            RoundedRectangle(cornerRadius: w * 0.05, style: .continuous).stroke(color, lineWidth: line)
+                .frame(width: w * 0.46, height: h * 0.22).position(x: w * 0.5, y: h * 0.13)
+            // ボタンの面（少し傾いた台形でなく、角丸の箱）
+            RoundedRectangle(cornerRadius: w * 0.07, style: .continuous).stroke(color, lineWidth: line)
+                .frame(width: w * 0.88, height: h * 0.36).position(x: w * 0.5, y: h * 0.52)
+            // ボタン 3×2
+            ForEach(0..<6, id: \.self) { i in
+                Circle().fill(color).frame(width: w * 0.075, height: w * 0.075)
+                    .position(x: w * (0.30 + 0.20 * CGFloat(i % 3)), y: h * (0.45 + 0.14 * CGFloat(i / 3)))
+            }
+            // ドロア
+            RoundedRectangle(cornerRadius: w * 0.05, style: .continuous).stroke(color, lineWidth: line)
+                .frame(width: w * 0.96, height: h * 0.20).position(x: w * 0.5, y: h * 0.84)
+            Capsule().fill(color).frame(width: w * 0.22, height: line * 1.4).position(x: w * 0.5, y: h * 0.84)
+        }
+        .frame(width: w, height: h)
     }
 }
