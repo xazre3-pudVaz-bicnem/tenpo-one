@@ -10,13 +10,13 @@ const pair = (left: string, right: string, size = 18): TicketRow => ({ cells: [c
 
 /** One shared printable design, independent of printer protocol. No sample menu IDs. */
 export function kitchenDesign(ticket: KitchenTicket, opts: KitchenLayoutOptions): TicketDesign {
-  const size = opts.textSize === 'large' ? 40 : opts.textSize === 'normal' ? 32 : 36;
+  const size = opts.textSize === 'large' ? 50 : opts.textSize === 'normal' ? 40 : 45;
   const allCancel = ticket.lines.every(l => l.delta < 0);
   const part = ticket.part && ticket.part.total > 1 ? ` (${ticket.part.index}/${ticket.part.total})` : '';
   const rows: TicketRow[] = [
-    { ...text(opts.title.replace(/\s*伝票$/, ''), 28, 'center'), gap: 12 },
-    { cells: [cell(''), { ...cell(ticket.tableName ?? 'テイクアウト', 'center', 1.3), size: 44, bold: true }, cell(ticket.guestCount == null ? '' : `人数：${ticket.guestCount}名`, 'right')], size: 28 },
-    { cells: [cell(`伝票No.${ticket.orderNo}${part}`), cell(opts.printedAt, 'center', .6), cell(ticket.clerkName ? `担当 ${ticket.clerkName}` : '', 'right')], size: 22, rule: 'solid', gap: 10 },
+    { ...text(opts.title.replace(/\s*伝票$/, ''), 32, 'center'), gap: 12 },
+    { cells: [{ ...cell(opts.printedAt, 'left'), size: 36, bold: true }, { ...cell(ticket.tableName ?? 'テイクアウト', 'center', 1.3), size: 52, bold: true }, cell(ticket.guestCount == null ? '' : `人数：${ticket.guestCount}名`, 'right')], size: 32 },
+    { cells: [cell(`伝票No.${ticket.orderNo}${part}`, 'left'), cell(''), cell(ticket.clerkName ? `担当 ${ticket.clerkName}` : '', 'right')], size: 26, rule: 'solid', gap: 10 },
   ];
   if (allCancel) rows.push({ ...text('取消 / CANCEL', 28, 'center'), bold: true, black: true });
   else if (ticket.lines.every(l => l.delta > 0)) rows.push(text('[ NEW ORDER ]', 22));
