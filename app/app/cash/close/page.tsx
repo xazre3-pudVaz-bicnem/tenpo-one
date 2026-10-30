@@ -65,7 +65,7 @@ export default async function CashClosePage({
   /** レジ端末（<店舗名>（レジ）アカウントの iPad）。締めに要るものだけを1画面に出す */
   const isRegi = ctx.isRegisterDevice === true;
 
-  const [board, cashRows, { data: settledOrders }, { data: refunds }, { data: openOrders }, { data: payments }, { data: orgKpiRow }, breakdown] =
+  const [board, cashRows, { data: settledOrders }, { data: refunds }, { data: openOrders }, { data: payments }, { data: orgKpiRow }, breakdown, { data: clerkRows }] =
     await Promise.all([
       loadRegisterBoard(store.id, today),
       loadTodayCashRows(store.id, today),
@@ -94,6 +94,11 @@ export default async function CashClosePage({
       supabase.from('organizations').select('kpi_settings').eq('id', ctx.organizationId).maybeSingle(),
       // 売上の内訳は管理画面だけ（レジの iPad では読まない）
       isRegi ? null : loadCloseBreakdown(store.id, period, bdDate),
+      // パソコンの管理画面には担当者ポップアップ（ClerkGate）が無いので、カードの中で担当者を選べるように担当者一覧を渡す
+      // （2026-10-17 Ronnie：PC で「担当者を選ぶ」が開かずレジクローズできなかった）
+      isRegi
+        ? Promise.resolve({ data: null })
+        : supabase.from('pos_clerks').select('id, name').eq('store_id', store.id).eq('status', 'active').order('sort_order').order('name'),
     ]);
 
   const metricsOpts: SalesMetricsOptions = {
@@ -138,6 +143,7 @@ export default async function CashClosePage({
           openSlipCount={openCount}
           nextFloatTarget={storeDay.nextFloatSetting ?? s.openingFloat}
           denominationColumns={isRegi ? 2 : 1}
+          clerks={isRegi ? undefined : (clerkRows ?? []).map((c) => ({ id: c.id, name: c.name }))}
         />
       ))}
       {openSessions.length === 0 && (

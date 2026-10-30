@@ -2,7 +2,7 @@
 
 import Link from 'next/link';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useMemo, useRef, useState, useTransition } from 'react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Dialog } from '@/components/ui/dialog';
@@ -46,6 +46,7 @@ export function RegisterCountCard({
   openSlipCount = 0,
   nextFloatTarget,
   denominationColumns = 1,
+  clerks,
 }: {
   session: CountSession;
   showRegisterName: boolean;
@@ -58,6 +59,11 @@ export function RegisterCountCard({
   nextFloatTarget?: number;
   /** 金種の表を2列に（レジの iPad で1画面に収める。2026-09-29 Ronnie） */
   denominationColumns?: 1 | 2;
+  /**
+   * 担当者の一覧（パソコンの管理画面だけ）。レジの iPad では ClerkGate のポップアップで選ぶが、
+   * 管理画面には ClerkGate が無く「担当者を選ぶ」を押しても何も起きずクローズできなかった（2026-10-17 Ronnie）。
+   */
+  clerks?: { id: string; name: string }[];
 }) {
   // 金種別に数えた枚数。合計がそのまま実査額になる（電卓で足し算しなくてよい）
   const [counts, setCounts] = useState<DenominationCounts>({});
@@ -65,6 +71,15 @@ export function RegisterCountCard({
   const [pending, startTransition] = useTransition();
   const { toast } = useToast();
   const clerkGate = useClerkGate();
+  // 管理画面（ClerkGate 無し）で選んだ担当者
+  const [pickedClerk, setPickedClerk] = useState('');
+  const clerkSelectRef = useRef<HTMLSelectElement>(null);
+  const localClerkPicker = !clerkGate && (clerks?.length ?? 0) > 0;
+  /** 担当者を選び直す：レジの iPad はポップアップ、管理画面はカード内のセレクトへ */
+  const pickClerk = () => {
+    if (clerkGate) clerkGate.change();
+    else clerkSelectRef.current?.focus();
+  };
 
   const entered = hasAnyCount(counts);
   const countedValue = useMemo(() => sumDenominations(counts), [counts]);
@@ -75,7 +90,7 @@ export function RegisterCountCard({
     ? closePlan({ counted: countedValue, openingFloat: session.openingFloat, nextFloatSetting: nextFloatTarget ?? null })
     : null;
   /** レジクローズの担当者（必ず選ぶ。精算レシートに出る） */
-  const clerkName = clerkGate?.clerk?.name ?? null;
+  const clerkName = clerkGate?.clerk?.name ?? (localClerkPicker && pickedClerk ? pickedClerk : null);
   const blocked = openSlipCount > 0 || !entered || diff !== 0 || !clerkName;
   /**
    * 締められない理由（日本語と英語）。押したときにポップアップで出す
@@ -256,6 +271,28 @@ export function RegisterCountCard({
           </div>
         )}
 
+        {localClerkPicker && (
+          <div className="border-b border-line py-3">
+            <label htmlFor={`close-clerk-${session.id}`} className="mb-1 block text-sm font-medium text-ink">
+              レジクローズの担当者
+            </label>
+            <select
+              id={`close-clerk-${session.id}`}
+              ref={clerkSelectRef}
+              value={pickedClerk}
+              onChange={(e) => setPickedClerk(e.target.value)}
+              className="ui-input h-10 w-full border border-gray-300 bg-white px-3 text-sm text-gray-900 focus:border-primary focus:outline-2 focus:outline-primary/30"
+            >
+              <option value="">担当者を選ぶ</option>
+              {clerks!.map((c) => (
+                <option key={c.id} value={c.name}>
+                  {c.name}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
         {/* 締められない理由（2026-09-25 店舗要望の3つのルール） */}
         {blocked && (
           <ul className="mt-3 space-y-1 rounded-xl border border-danger/30 bg-danger/8 px-3 py-2.5 text-[13px] font-bold text-danger">
@@ -280,7 +317,7 @@ export function RegisterCountCard({
             {!clerkName && (
               <li>
                 レジクローズの担当者を選んでください
-                <button type="button" onClick={() => clerkGate?.change()} className="ml-1.5 underline">
+                <button type="button" onClick={pickClerk} className="ml-1.5 underline">
                   担当者を選ぶ
                 </button>
               </li>
@@ -328,13 +365,13 @@ export function RegisterCountCard({
           ))}
         </ul>
         <div className="mt-4 flex flex-wrap justify-end gap-2">
-          {!clerkName && clerkGate && (
+          {!clerkName && (clerkGate || localClerkPicker) && (
             <Button
               type="button"
               variant="secondary"
               onClick={() => {
                 setProblemPopup(null);
-                clerkGate.change();
+                pickClerk();
               }}
             >
               担当者を選ぶ / Select staff
