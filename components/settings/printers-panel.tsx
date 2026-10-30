@@ -9,7 +9,7 @@ import { EmptyState } from '@/components/ui/state';
 import { ConfirmDialog } from '@/components/ui/confirm-dialog';
 import { useToast } from '@/components/ui/toast';
 import { deletePrinterConfig } from '@/app/app/settings/printers/actions';
-import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, STORE_PRINTER_CONNECTIONS } from '@/lib/network-printers';
+import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, STORE_CAN_EDIT_NETWORK_PRINTERS, STORE_PRINTER_CONNECTIONS } from '@/lib/network-printers';
 import { PrinterDialog, type FloorOption, type PrinterConfigRow } from './printer-dialog';
 import { TestPrintDialog } from './test-print-dialog';
 
@@ -53,6 +53,7 @@ export function PrintersPanel({
       </div>
 
       {/* 有線LAN・Wi-Fi のプリンターは運営（コントロールセンター）で追加・変更する。ここでは見るだけ（2026-10-25 Ronnie） */}
+      {!STORE_CAN_EDIT_NETWORK_PRINTERS && (
       <p className="flex items-start gap-1.5 text-xs text-gray-500">
         <Lock className="mt-0.5 h-3.5 w-3.5 shrink-0 text-gray-400" aria-hidden />
         <span>
@@ -60,6 +61,7 @@ export function PrintersPanel({
           {hasNetwork ? '（下の一覧の 有線LAN・Wi-Fi のプリンターは見るだけです）' : ''}。ここで追加できるのは Bluetooth・USB・ブラウザ印刷のプリンターです
         </span>
       </p>
+      )}
 
       {rows.length === 0 ? (
         <EmptyState title="プリンターが登録されていません" description="「プリンター追加」から登録してください" />
@@ -93,7 +95,7 @@ export function PrintersPanel({
                     {r.cloudprntEnabled && (
                       <Badge tone="success" className="ml-1">実機印字</Badge>
                     )}
-                    {isNetworkConnection(r.connectionType) && (
+                    {!STORE_CAN_EDIT_NETWORK_PRINTERS && isNetworkConnection(r.connectionType) && (
                       <Badge tone="gray" className="ml-1">運営で設定</Badge>
                     )}
                   </Td>
@@ -137,7 +139,7 @@ export function PrintersPanel({
                       >
                         <PrinterIcon className="h-4 w-4" />
                       </button>
-                      {isNetworkConnection(r.connectionType) ? (
+                      {!STORE_CAN_EDIT_NETWORK_PRINTERS && isNetworkConnection(r.connectionType) ? (
                         <span
                           className="rounded-lg p-1.5 text-gray-300"
                           title={NETWORK_PRINTER_ADMIN_NOTE}

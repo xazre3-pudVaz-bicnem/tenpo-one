@@ -10,7 +10,7 @@
  */
 
 import { printerDeliveryOf } from '@/lib/direct-print';
-import { parseNetworkPrinterRef, type NetworkPrinterRefInput } from '@/lib/network-printers';
+import { parseNetworkPrinterRef, STORE_CAN_EDIT_NETWORK_PRINTERS, type NetworkPrinterRefInput } from '@/lib/network-printers';
 import { cloudprntPollSeconds } from '@/lib/cloudprnt-setting';
 
 /** お店の管理画面に出す案内（店舗の Server Action が断るときの言葉も同じ） */
@@ -18,7 +18,9 @@ export const PRINTER_CONNECTION_ADMIN_NOTE = '接続の設定は TENPO ONE の�
 
 /** プリンター接続の設定を変えられる人（運営＝CYPRESS 管理者だけ。レジ端末の iPad は運営でも不可） */
 export function canEditPrinterConnection(ctx: { isCypressAdmin?: boolean | null; isRegisterDevice?: boolean | null }): boolean {
-  return ctx.isCypressAdmin === true && ctx.isRegisterDevice !== true;
+  if (ctx.isRegisterDevice === true) return false;
+  // 2026-10-30 Ronnie「ahile lai sabai unlocked gara」＝いまはお店の管理画面からも変えられる（戻すときは STORE_CAN_EDIT_NETWORK_PRINTERS を false に）
+  return STORE_CAN_EDIT_NETWORK_PRINTERS || ctx.isCypressAdmin === true;
 }
 
 // -------------------------------------------------------------

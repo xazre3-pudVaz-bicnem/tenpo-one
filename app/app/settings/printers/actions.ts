@@ -13,7 +13,7 @@ import { normalizeVisitSourceIds } from '@/lib/handy-visit';
 // ハードウェア（レジ端末・プリンター・ドロア）の変更は管理画面だけ。レジ端末（iPad）からは断る（2026-09-29 Ronnie）
 import { ADMIN_ONLY_MESSAGE, ADMIN_ONLY_SETTINGS_NOTE } from '@/lib/admin-only-settings';
 // LAN・Wi-Fi のプリンターは運営（コントロールセンター）だけ（2026-10-25 Ronnie）。入力チェックと列は運営と同じ（lib/network-printers.ts）
-import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, printerConfigColumns, printerConfigError } from '@/lib/network-printers';
+import { isNetworkConnection, NETWORK_PRINTER_ADMIN_NOTE, printerConfigColumns, printerConfigError, STORE_CAN_EDIT_NETWORK_PRINTERS } from '@/lib/network-printers';
 // プリンター接続（CloudPRNT・Server Direct Print・iPad）の設定は運営（コントロールセンター）だけ（2026-10-25 Ronnie）。テスト印刷はお店でも
 import { canEditPrinterConnection, cloudPrntConfigPatch, PRINTER_CONNECTION_ADMIN_NOTE } from '@/lib/printer-connection';
 import { CLOUDPRNT_TEST_JOB, cloudPrntTestError, cloudPrntTestPayload, newCloudPrntToken } from '@/lib/cloudprnt-test-job';
@@ -151,14 +151,14 @@ export async function savePrinterConfig(input: PrinterConfigInput): Promise<Acti
   const err = assertStoreAccess(ctx.stores.map((s) => s.id), input.storeId);
   if (err) return { error: err };
   // 有線LAN・Wi-Fi のプリンターは運営（コントロールセンター）で追加・変更する。お店の管理画面からは断る
-  if (isNetworkConnection(input.connectionType)) return { error: NETWORK_PRINTER_ADMIN_NOTE };
+  if (!STORE_CAN_EDIT_NETWORK_PRINTERS && isNetworkConnection(input.connectionType)) return { error: NETWORK_PRINTER_ADMIN_NOTE };
   const inputError = printerConfigError(input);
   if (inputError) return { error: inputError };
 
   const supabase = await createClient();
 
   // 今 LAN・Wi-Fi の行は、お店からは変えない（Bluetooth などへの付け替えも運営で）
-  if (input.id) {
+  if (input.id && !STORE_CAN_EDIT_NETWORK_PRINTERS) {
     const { data: current } = await supabase
       .from('printer_configs')
       .select('id, connection_type')
@@ -222,13 +222,15 @@ export async function deletePrinterConfig(id: string, storeId: string): Promise<
 
   const supabase = await createClient();
   // 有線LAN・Wi-Fi のプリンターは運営（コントロールセンター）で消す
-  const { data: current } = await supabase
-    .from('printer_configs')
-    .select('id, connection_type')
-    .eq('id', id)
-    .eq('organization_id', ctx.organizationId)
-    .maybeSingle();
-  if (current && isNetworkConnection(current.connection_type)) return { error: NETWORK_PRINTER_ADMIN_NOTE };
+  if (!STORE_CAN_EDIT_NETWORK_PRINTERS) {
+    const { data: current } = await supabase
+      .from('printer_configs')
+      .select('id, connection_type')
+      .eq('id', id)
+      .eq('organization_id', ctx.organizationId)
+      .maybeSingle();
+    if (current && isNetworkConnection(current.connection_type)) return { error: NETWORK_PRINTER_ADMIN_NOTE };
+  }
 
   const { error } = await supabase
     .from('printer_configs')

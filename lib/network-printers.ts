@@ -13,6 +13,13 @@ import { isEpsonMaker, isLanRelayPrinter, isLocalPrinterHost, parseLanTarget, pr
 import { deviceSettingsFrom, EMPTY_DEVICE_SETTING, withDeviceSetting, type DeviceSetting } from '@/lib/device-settings';
 import { normalizeFloorIds } from '@/lib/printer-floors';
 
+/**
+ * お店の管理画面（/app/settings/printers）で有線LAN・Wi-Fi のプリンターを追加・変更・削除できるか。
+ * 2026-10-30 Ronnie「管理画面 bata printer edit garna milne banau」＝いまは ON（コントロールセンターに無いので）。
+ * 運営だけに戻すときは false にするだけ（画面・保存・削除がまとめて元の「見るだけ」に戻る）。
+ */
+export const STORE_CAN_EDIT_NETWORK_PRINTERS = true;
+
 /** お店の管理画面・iPad に出す案内 */
 export const NETWORK_PRINTER_ADMIN_NOTE = 'LAN・Wi-Fi のプリンターは TENPO ONE の運営（コントロールセンター）で設定します';
 
@@ -20,7 +27,7 @@ export const NETWORK_CONNECTIONS = ['lan', 'wifi'] as const;
 export type NetworkConnection = (typeof NETWORK_CONNECTIONS)[number];
 
 /** お店の管理画面で選べる接続方式（有線LAN・Wi-Fi は運営だけ） */
-export const STORE_PRINTER_CONNECTIONS = ['browser', 'bluetooth', 'usb'] as const;
+export const STORE_PRINTER_CONNECTIONS = (STORE_CAN_EDIT_NETWORK_PRINTERS ? ['browser', 'bluetooth', 'usb', 'lan', 'wifi'] : ['browser', 'bluetooth', 'usb']) as readonly string[];
 
 /** 1 台の iPad に割り当てられる LAN / Wi-Fi のプリンターの数（iPad の保存と同じ） */
 export const MAX_DEVICE_NETWORK_PRINTERS = 8;

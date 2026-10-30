@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { choiceToNativePos, deviceSettingsFrom, withDeviceSetting, type DeviceSetting } from '@/lib/device-settings';
-import { keepNetworkPrinters } from '@/lib/network-printers';
+import { keepKnownPrinterIds, keepNetworkPrinters, networkPrinterCandidates, NETWORK_CONNECTIONS, STORE_CAN_EDIT_NETWORK_PRINTERS, withNetworkPrinters, type NetworkPrinterRow } from '@/lib/network-printers';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -15,6 +15,9 @@ export interface SaveDeviceSettingInput {
   /** '' で「端末で選んだもの／店の既定」 */
   printerConfigId: string;
   nativePos: 'device' | 'on' | 'off';
+  /** LAN・Wi-Fi のプリンター（null＝端末まかせ・[]＝送らない・undefined＝今のまま）。2026-10-30 お店の管理画面からも決められる */
+  lanPrinterIds?: string[] | null;
+  wifiPrinterIds?: string[] | null;
 }
 
 /**
@@ -50,8 +53,8 @@ export async function saveRegisterDeviceSetting(input: SaveDeviceSettingInput): 
   if (readError) return { ok: false, error: `店舗設定の読み込みに失敗しました: ${readError.message}` };
   const current = (existing?.settings as Record<string, unknown> | null) ?? {};
 
-  // LAN・Wi-Fi は今の値のまま（運営が決める）
-  const setting: DeviceSetting = keepNetworkPrinters(
+  // LAN・Wi-Fi：送られてきたときだけ変える（この店の、使っているプリンターの候補に無い id は捨てる）。送られなければ今の値のまま
+  let setting: DeviceSetting = keepNetworkPrinters(
     {
       label: input.label.trim().slice(0, 40) || null,
       printerConfigId,
@@ -59,6 +62,20 @@ export async function saveRegisterDeviceSetting(input: SaveDeviceSettingInput): 
     },
     deviceSettingsFrom(current)[input.deviceId]
   );
+  if (STORE_CAN_EDIT_NETWORK_PRINTERS && (input.lanPrinterIds !== undefined || input.wifiPrinterIds !== undefined)) {
+    const { data: printerRows } = await supabase
+      .from('printer_configs')
+      .select('id, name, maker, usage, connection_type, ip_address, cloudprnt_enabled')
+      .eq('store_id', input.storeId)
+      .eq('status', 'active')
+      .in('connection_type', [...NETWORK_CONNECTIONS]);
+    const { lan, wifi } = networkPrinterCandidates((printerRows ?? []) as NetworkPrinterRow[]);
+    setting = withNetworkPrinters(
+      setting,
+      input.lanPrinterIds === undefined ? setting.lanPrinterIds ?? null : keepKnownPrinterIds(input.lanPrinterIds, new Set(lan.map((p) => p.id))),
+      input.wifiPrinterIds === undefined ? setting.wifiPrinterIds ?? null : keepKnownPrinterIds(input.wifiPrinterIds, new Set(wifi.map((p) => p.id)))
+    );
+  }
 
   const { error } = await supabase.from('store_settings').upsert(
     {
