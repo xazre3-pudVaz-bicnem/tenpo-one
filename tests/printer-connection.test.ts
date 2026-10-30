@@ -298,11 +298,12 @@ describe('printer-connection: 行と項目', () => {
     expect(kitchenStationsLabel([])).toBe('—');
   });
 
-  it('変えられるのは運営（CYPRESS 管理者）だけ。レジ端末の iPad は運営でも不可', () => {
+  it('変えられるのは お店の管理画面と運営（STORE_CAN_EDIT_NETWORK_PRINTERS が ON の間）。レジ端末の iPad は不可', () => {
     expect(canEditPrinterConnection({ isCypressAdmin: true })).toBe(true);
-    expect(canEditPrinterConnection({ isCypressAdmin: false })).toBe(false);
-    expect(canEditPrinterConnection({})).toBe(false);
+    expect(canEditPrinterConnection({ isCypressAdmin: false })).toBe(true);
+    expect(canEditPrinterConnection({})).toBe(true);
     expect(canEditPrinterConnection({ isCypressAdmin: true, isRegisterDevice: true })).toBe(false);
+    expect(canEditPrinterConnection({ isRegisterDevice: true })).toBe(false);
   });
 });
 
@@ -513,13 +514,12 @@ describe('運営：プリンター接続（app/admin/organizations/printer-conne
 // -------------------------------------------------------------
 
 describe('お店の管理画面：プリンター接続は見るだけ', () => {
-  it('運営でないアカウントは 使う・間隔・ドロア・伝票・URL再発行 を変えられない（何も書かない）', async () => {
-    expect(await setCloudPrntConfig({ id: RECEIPT_P, storeId: STORE, enabled: false })).toEqual({ error: PRINTER_CONNECTION_ADMIN_NOTE });
-    expect(await setCloudPrntConfig({ id: KITCHEN_P, storeId: STORE, enabled: true, pollIntervalSeconds: 3, kitchenStations: ['drink'] })).toEqual({
+  it('お店の管理者は 使う・間隔・ドロア・伝票・URL再発行 を変えられる（いまは ON。断る言葉は出ない）', async () => {
+    expect(await setCloudPrntConfig({ id: RECEIPT_P, storeId: STORE, enabled: false })).not.toEqual({ error: PRINTER_CONNECTION_ADMIN_NOTE });
+    expect(await setCloudPrntConfig({ id: KITCHEN_P, storeId: STORE, enabled: true, pollIntervalSeconds: 3, kitchenStations: ['drink'] })).not.toEqual({
       error: PRINTER_CONNECTION_ADMIN_NOTE,
     });
-    expect(await regenerateCloudPrntToken(RECEIPT_P, STORE)).toEqual({ error: PRINTER_CONNECTION_ADMIN_NOTE });
-    expect(h.state.calls).toEqual([]);
+    expect(await regenerateCloudPrntToken(RECEIPT_P, STORE)).not.toEqual({ error: PRINTER_CONNECTION_ADMIN_NOTE });
   });
 
   it('レジ端末（iPad）は今まで通りの言葉で断る', async () => {

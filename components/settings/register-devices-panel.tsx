@@ -6,7 +6,7 @@ import { Input, Select } from '@/components/ui/input';
 import { useToast } from '@/components/ui/toast';
 import { cn } from '@/lib/utils';
 import { type DeviceSetting } from '@/lib/device-settings';
-import { describeNetworkPrinterIds, NETWORK_PRINTER_ADMIN_NOTE } from '@/lib/network-printers';
+import { describeNetworkPrinterIds, NETWORK_PRINTER_ADMIN_NOTE, STORE_CAN_EDIT_NETWORK_PRINTERS } from '@/lib/network-printers';
 import { saveRegisterDeviceSetting } from '@/app/app/settings/devices/actions';
 import { APPROVAL_LABELS } from '@/lib/device-control';
 
@@ -86,7 +86,12 @@ function DeviceCard({
   const [label, setLabel] = useState(device.setting.label ?? '');
   const [printerId, setPrinterId] = useState(device.setting.printerConfigId ?? '');
   const [saved, setSaved] = useState(device.setting);
-  const dirty = (saved.label ?? '') !== label.trim() || (saved.printerConfigId ?? '') !== printerId;
+  const [lanIds, setLanIds] = useState<string[] | null>(device.setting.lanPrinterIds ?? null);
+  const [wifiIds, setWifiIds] = useState<string[] | null>(device.setting.wifiPrinterIds ?? null);
+  const sameIds = (a: string[] | null | undefined, b: string[] | null) =>
+    (a ?? null) === null || b === null ? (a ?? null) === b : a!.length === b.length && a!.every((x) => b.includes(x));
+  const networkDirty = STORE_CAN_EDIT_NETWORK_PRINTERS && (!sameIds(saved.lanPrinterIds, lanIds) || !sameIds(saved.wifiPrinterIds, wifiIds));
+  const dirty = (saved.label ?? '') !== label.trim() || (saved.printerConfigId ?? '') !== printerId || networkDirty;
   const revoked = device.status === 'revoked';
 
   const save = () =>
@@ -96,6 +101,7 @@ function DeviceCard({
         deviceId: device.id,
         label,
         printerConfigId: printerId,
+        ...(STORE_CAN_EDIT_NETWORK_PRINTERS ? { lanPrinterIds: lanIds, wifiPrinterIds: wifiIds } : {}),
         // ネイティブの ON/OFF は無くなった（iPad は常にアプリの画面。2026-10-25 Ronnie「Web の iPad 版はもう要らない」）
         nativePos: 'device',
       });
@@ -104,6 +110,8 @@ function DeviceCard({
         return;
       }
       setSaved(res.setting);
+      setLanIds(res.setting.lanPrinterIds ?? null);
+      setWifiIds(res.setting.wifiPrinterIds ?? null);
       setLabel(res.setting.label ?? '');
       toast('保存しました。iPad は次に画面を開いたときから反映されます');
     });
@@ -150,10 +158,19 @@ function DeviceCard({
       {/* LAN / Wi-Fi は運営（コントロールセンター）が決める。ここでは見るだけ（2026-10-25 Ronnie） */}
       <div className="border-t border-line px-5 py-4">
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-          <NetworkPrinterView title="LAN のプリンターへ、この iPad から送る" value={device.setting.lanPrinterIds} options={lanPrinters} />
-          <NetworkPrinterView title="Wi-Fi で直接印刷（EPSON）" value={device.setting.wifiPrinterIds} options={wifiPrinters} />
+          {STORE_CAN_EDIT_NETWORK_PRINTERS ? (
+            <>
+              <NetworkPrinterPicker title="LAN のプリンターへ、この iPad から送る" value={lanIds} onChange={setLanIds} options={lanPrinters} disabled={revoked} />
+              <NetworkPrinterPicker title="Wi-Fi で直接印刷（EPSON）" value={wifiIds} onChange={setWifiIds} options={wifiPrinters} disabled={revoked} />
+            </>
+          ) : (
+            <>
+              <NetworkPrinterView title="LAN のプリンターへ、この iPad から送る" value={device.setting.lanPrinterIds} options={lanPrinters} />
+              <NetworkPrinterView title="Wi-Fi で直接印刷（EPSON）" value={device.setting.wifiPrinterIds} options={wifiPrinters} />
+            </>
+          )}
         </div>
-        <p className="mt-3 text-xs text-ink-3">{NETWORK_PRINTER_ADMIN_NOTE}</p>
+        {!STORE_CAN_EDIT_NETWORK_PRINTERS && <p className="mt-3 text-xs text-ink-3">{NETWORK_PRINTER_ADMIN_NOTE}</p>}
       </div>
     </section>
   );
@@ -165,6 +182,48 @@ function NetworkPrinterView({ title, value, options }: { title: string; value: s
     <div className="flex flex-col gap-1 text-[13px]">
       <span className="font-bold text-ink-2">{title}</span>
       <span className="rounded-lg bg-surface px-3 py-2 text-ink">{describeNetworkPrinterIds(value, options)}</span>
+    </div>
+  );
+}
+
+/** LAN / Wi-Fi のプリンターをこの iPad に割り当てる（null＝端末まかせ・チェックなし＝送らない） */
+function NetworkPrinterPicker({
+  title,
+  value,
+  onChange,
+  options,
+  disabled,
+}: {
+  title: string;
+  value: string[] | null;
+  onChange: (v: string[] | null) => void;
+  options: NetworkPrinterOption[];
+  disabled?: boolean;
+}) {
+  const auto = value === null;
+  return (
+    <div className="flex flex-col gap-1.5 text-[13px]">
+      <span className="font-bold text-ink-2">{title}</span>
+      <label className="flex items-center gap-2 text-ink">
+        <input type="checkbox" checked={auto} disabled={disabled} onChange={(e) => onChange(e.target.checked ? null : [])} />
+        端末まかせ（今までどおり）
+      </label>
+      {options.length === 0 ? (
+        <span className="text-xs text-ink-3">使えるプリンターがありません（設定 › プリンターで追加し、「プリンター接続」を使うにします）</span>
+      ) : (
+        options.map((o) => (
+          <label key={o.id} className={cn('flex items-center gap-2 text-ink', auto && 'opacity-50')}>
+            <input
+              type="checkbox"
+              disabled={disabled || auto}
+              checked={!auto && (value ?? []).includes(o.id)}
+              onChange={(e) => onChange(e.target.checked ? [...(value ?? []), o.id] : (value ?? []).filter((x) => x !== o.id))}
+            />
+            {o.name}
+            <span className="text-xs text-ink-3">（{o.detail}）</span>
+          </label>
+        ))
+      )}
     </div>
   );
 }

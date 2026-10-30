@@ -8,7 +8,7 @@ import { RegisterDevicesPanel, type PrinterOption, type RegisterDeviceRow } from
 import { ADMIN_ONLY_MESSAGE } from '@/lib/admin-only-settings';
 import { deviceKind, deviceSettingsFrom, EMPTY_DEVICE_SETTING } from '@/lib/device-settings';
 import { PRINTER_MAKER_LABEL } from '@/lib/printer-models';
-import { NETWORK_PRINTER_ADMIN_NOTE, networkPrinterCandidates, type NetworkPrinterRow } from '@/lib/network-printers';
+import { NETWORK_PRINTER_ADMIN_NOTE, networkPrinterCandidates, STORE_CAN_EDIT_NETWORK_PRINTERS, type NetworkPrinterRow } from '@/lib/network-printers';
 import { selectDevicesWithApproval } from '@/lib/device-control-server';
 import { DEVICE_MESSAGE } from '@/lib/device-control';
 
@@ -95,7 +95,7 @@ export default async function RegisterDevicesSettingsPage() {
       <PageHeader
         title="レジ端末（iPad）"
         en="Register iPads"
-        description={`${targetStore.name}・レジとして登録した iPad ごとに、表示名とレシートの出し先を管理画面から決めます（iPad では Bluetooth のプリンターだけつなぎます）。${NETWORK_PRINTER_ADMIN_NOTE}`}
+        description={`${targetStore.name}・レジとして登録した iPad ごとに、表示名とレシートの出し先を管理画面から決めます（iPad では Bluetooth のプリンターだけつなぎます）。${STORE_CAN_EDIT_NETWORK_PRINTERS ? 'LAN・Wi-Fi のプリンターもここで選べます' : NETWORK_PRINTER_ADMIN_NOTE}`}
       />
       <RegisterDevicesPanel storeId={targetStore.id} devices={devices} printers={printers} lanPrinters={lanPrinters} wifiPrinters={wifiPrinters} />
       <p className="mt-4 text-xs text-ink-3">

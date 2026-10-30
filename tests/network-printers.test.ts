@@ -102,6 +102,8 @@ import {
   keepKnownPrinterIds,
   keepNetworkPrinters,
   NETWORK_PRINTER_ADMIN_NOTE,
+  STORE_CAN_EDIT_NETWORK_PRINTERS,
+  STORE_PRINTER_CONNECTIONS,
   networkPrinterCandidates,
   parseDeviceNetworkPrintersInput,
   parseNetworkPrinterInput,
@@ -441,8 +443,8 @@ describe('運営：LAN・Wi-Fi のプリンター（app/admin/organizations/prin
 // お店の管理画面からは LAN・Wi-Fi を変えない
 // -------------------------------------------------------------
 
-describe('お店の管理画面：LAN・Wi-Fi は見るだけ', () => {
-  it('設定 › レジ端末の保存は lanPrinterIds / wifiPrinterIds を書かない（今の値を残す）', async () => {
+describe('お店の管理画面：LAN・Wi-Fi の割り当て', () => {
+  it('設定 › レジ端末の保存は lanPrinterIds / wifiPrinterIds を送らなければ今の値を残す', async () => {
     world({}, { devices: { [DEVICE]: { label: '入口', lanPrinterIds: [LAN_P], wifiPrinterIds: [] } } });
     const res = await saveRegisterDeviceSetting({
       storeId: STORE,
@@ -450,8 +452,6 @@ describe('お店の管理画面：LAN・Wi-Fi は見るだけ', () => {
       label: '2階レジ',
       printerConfigId: '',
       nativePos: 'device',
-      // 古い画面・作った POST が送ってきても無視する
-      ...({ lanPrinterIds: [EPSON_P], wifiPrinterIds: [EPSON_P] } as Row),
     } as Parameters<typeof saveRegisterDeviceSetting>[0]);
     expect(res).toEqual({ ok: true, setting: { ...EMPTY_DEVICE_SETTING, label: '2階レジ', lanPrinterIds: [LAN_P], wifiPrinterIds: [] } });
     const upsert = writes().find((c) => c.table === 'store_settings');
@@ -472,7 +472,8 @@ describe('お店の管理画面：LAN・Wi-Fi は見るだけ', () => {
     expect(res.ok && res.setting.wifiPrinterIds).toBeNull();
   });
 
-  it('設定 › レジ・プリンター：有線LAN・Wi-Fi のプリンターは追加・変更・削除できない', async () => {
+  it('設定 › レジ・プリンター：有線LAN・Wi-Fi のプリンターも管理画面から追加・変更・削除できる（STORE_CAN_EDIT_NETWORK_PRINTERS）', async () => {
+    expect(STORE_CAN_EDIT_NETWORK_PRINTERS).toBe(true);
     world({ printer_configs: (c) => ({ data: c.op === 'select' ? { id: LAN_P, connection_type: 'lan' } : null, error: null }) });
     const base = {
       storeId: STORE,
@@ -485,17 +486,16 @@ describe('お店の管理画面：LAN・Wi-Fi は見るだけ', () => {
       autoPrint: false,
       drawerKick: false,
     };
-    expect(await savePrinterConfig({ ...base, connectionType: 'wifi' })).toEqual({ error: NETWORK_PRINTER_ADMIN_NOTE });
-    expect(await savePrinterConfig({ ...base, connectionType: 'lan' })).toEqual({ error: NETWORK_PRINTER_ADMIN_NOTE });
-    // 今 LAN の行を Bluetooth に付け替えるのも運営で
-    expect(await savePrinterConfig({ ...base, id: LAN_P, connectionType: 'bluetooth' })).toEqual({ error: NETWORK_PRINTER_ADMIN_NOTE });
-    expect(await deletePrinterConfig(LAN_P, STORE)).toEqual({ error: NETWORK_PRINTER_ADMIN_NOTE });
-    expect(writes()).toEqual([]);
+    expect(await savePrinterConfig({ ...base, connectionType: 'wifi' })).toEqual({});
+    expect(await savePrinterConfig({ ...base, connectionType: 'lan' })).toEqual({});
+    expect(await savePrinterConfig({ ...base, id: LAN_P, connectionType: 'lan' })).toEqual({});
+    expect(await deletePrinterConfig(LAN_P, STORE)).toEqual({});
+    expect(STORE_PRINTER_CONNECTIONS).toEqual(['browser', 'bluetooth', 'usb', 'lan', 'wifi']);
 
     // Bluetooth のプリンターは今まで通り
     world({ printer_configs: (c) => ({ data: c.op === 'select' ? { id: LAN_P, connection_type: 'bluetooth' } : null, error: null }) });
     expect(await savePrinterConfig({ ...base, id: LAN_P, connectionType: 'bluetooth', usage: 'receipt' })).toEqual({});
-    expect(writes().find((c) => c.table === 'printer_configs')).toMatchObject({ op: 'update', payload: { connection_type: 'bluetooth', name: 'ドリンク' } });
+    expect(writes().filter((c) => c.table === 'printer_configs' && c.op === 'update').at(-1)).toMatchObject({ op: 'update', payload: { connection_type: 'bluetooth', name: 'ドリンク' } });
     expect(await deletePrinterConfig(LAN_P, STORE)).toEqual({});
   });
 });
