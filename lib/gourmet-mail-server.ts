@@ -178,15 +178,17 @@ function bodyForRecord(mail: InboundMail): string {
 
 /** 予約の「ご要望」欄：新規と同じ形（コース: 〇〇＋ご要望）。変更メールに無いものは前の内容を残す */
 export function changedNote(
-  parsed: { course: string | null; request: string | null },
+  parsed: { course: string | null; request: string | null; usedPoints?: number | null },
   prev: string | null
 ): string | null {
   const prevLines = (prev ?? '').split('\n');
   const prevCourse = prevLines.find((l) => l.startsWith('コース: ')) ?? null;
-  const prevRequest = prevLines.filter((l) => !l.startsWith('コース: ')).join('\n').trim() || null;
+  const pointsLine = prevLines.find((line) => /^利用ポイント: \d+ pt$/.test(line));
+  const points = parsed.usedPoints == null ? pointsLine : '利用ポイント: ' + parsed.usedPoints + ' pt';
+  const prevRequest = prevLines.filter((l) => !l.startsWith('コース: ') && l !== pointsLine).join('\n').trim() || null;
   const course = parsed.course ? `コース: ${parsed.course}` : prevCourse;
   const request = parsed.request ?? prevRequest;
-  const parts = [course, request].filter(Boolean);
+  const parts = [course, points, request].filter(Boolean);
   return parts.length ? parts.join('\n') : null;
 }
 
@@ -298,7 +300,6 @@ async function createReservation(
     }
   }
 
-  const noteParts = [parsed.course ? `コース: ${parsed.course}` : null, parsed.request].filter(Boolean);
   const memo = `${jstStamp(input.receivedAt)} ${input.siteName}のメールから自動登録${parsed.externalId ? `（予約番号 ${parsed.externalId}）` : ''}`;
 
   const { data: r, error } = await admin
@@ -316,7 +317,7 @@ async function createReservation(
       children: 0,
       guest_name: parsed.guestName,
       guest_phone: phone,
-      request_note: noteParts.length ? noteParts.join('\n') : null,
+      request_note: changedNote(parsed, null),
       memo,
       status: 'confirmed',
       source_id: (source?.id as string | null) ?? null,

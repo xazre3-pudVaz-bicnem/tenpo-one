@@ -140,3 +140,11 @@ describe('グルメサイト メール取り込み（2026-09-27 Ronnie）', () =
     expect(jstToIso('2026-10-03', '25:00')).toBe('2026-10-03T16:00:00.000Z');
   });
 });
+
+it('imports explicitly used points, including zero, and ignores earned points and conflicting amounts', () => {
+  const points = (text: string) => parseGourmetMail({ text }, NOW).usedPoints;
+  expect(points('獲得予定ポイント：80pt\nご利用ポイント：１，２００ポイント')).toBe(1200);
+  expect(points('ポイント利用：0 pt')).toBe(0);
+  expect(points('獲得予定ポイント：80pt')).toBeNull();
+  expect(points('利用ポイント：300pt\n利用ポイント：500pt')).toBeNull();
+});
