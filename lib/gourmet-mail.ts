@@ -344,6 +344,17 @@ export function extractLinks(text: string | null | undefined, html?: string | nu
   return out;
 }
 
+function extractUsedPoints(body: string): number | null {
+  const amounts = new Set<number>();
+  const field = /^[ \t]*(?:ご?利用ポイント(?:数)?|ご?使用ポイント(?:数)?|ポイント(?:利用|使用)(?:数)?)[ \t]*(?:[:：][ \t]*)?(\d{1,3}(?:,\d{3})+|\d+)[ \t]*(?:ポイント|pt|p)?[ \t]*$/gim;
+  for (const match of body.normalize('NFKC').matchAll(field)) {
+    const amount = Number(match[1].replaceAll(',', ''));
+    if (!Number.isSafeInteger(amount)) return null;
+    amounts.add(amount);
+  }
+  return amounts.size === 1 ? [...amounts][0] : null;
+}
+
 export interface ParsedGourmetMail {
   site: GourmetSiteKey;
   kind: MailKind;
@@ -359,6 +370,7 @@ export interface ParsedGourmetMail {
   request: string | null;
   /** 台帳に自動で入れられるだけ読めたか（日付・時刻・人数・名前） */
   complete: boolean;
+  usedPoints: number | null;
 }
 
 export function parseGourmetMail(
@@ -387,6 +399,7 @@ export function parseGourmetMail(
     course: extractCourse(body),
     request: extractRequest(body),
     complete,
+    usedPoints: extractUsedPoints(body),
   };
 }
 

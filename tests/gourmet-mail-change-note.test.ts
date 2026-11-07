@@ -18,3 +18,12 @@ describe('グルメサイトの変更メール：ご要望欄（コース）', a
     expect(changedNote({ course: null, request: null }, null)).toBeNull();
   });
 });
+
+it('retains used points across a request change and replaces them on an explicit zero', async () => {
+  const { changedNote } = await import('@/lib/gourmet-mail-server');
+  const original = changedNote({ course: null, request: '窓側希望', usedPoints: 500 }, null);
+  expect(original).toBe('利用ポイント: 500 pt\n窓側希望');
+  const changed = changedNote({ course: null, request: '個室希望', usedPoints: null }, original);
+  expect(changed).toBe('利用ポイント: 500 pt\n個室希望');
+  expect(changedNote({ course: null, request: null, usedPoints: 0 }, changed)).toBe('利用ポイント: 0 pt\n個室希望');
+});
