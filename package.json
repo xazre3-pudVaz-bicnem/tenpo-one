@@ -34,7 +34,7 @@
     "react-dom": "^19.2.0",
     "react-hook-form": "^7.64.0",
     "recharts": "^3.2.1",
-    "stripe": "^22.4.0",
+    "stripe": "^23.0.0",
     "tailwind-merge": "^3.3.1",
     "tesseract.js": "^7.0.0",
     "web-push": "^3.6.7",
