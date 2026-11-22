@@ -6,7 +6,7 @@ import { assertStoreAccess, requirePermission } from '@/lib/auth';
 import { createClient } from '@/lib/supabase/server';
 import { createAdminClient } from '@/lib/supabase/admin';
 import { currentRequestIp } from '@/lib/handy-device-server';
-import { networkKey } from '@/lib/handy-pairing';
+import { networkKey } from '@/lib/handy-network';
 import { addShopNetwork, handyQrFrom, isIpLiteral, type HandyQrSettings } from '@/lib/handy-qr';
 
 export interface ActionResult {
